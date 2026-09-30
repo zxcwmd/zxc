@@ -11,10 +11,10 @@ jobs:
     runs-on: windows-latest
     steps:
       - name: Check out source
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: npm
@@ -23,7 +23,15 @@ jobs:
         run: npm ci
 
       - name: Build Windows installer
-        run: npm run dist:win
+        shell: pwsh
+        run: |
+          npm run dist:win 2>&1 | Tee-Object -FilePath build-windows.log
+          if ($LASTEXITCODE -ne 0) {
+            $tail = (Get-Content build-windows.log -Tail 25) -join ' | '
+            $tail = $tail.Replace('%', '%25').Replace("`r", '%0D').Replace("`n", '%0A').Replace(':', '%3A').Replace(',', '%2C')
+            Write-Output "::error title=Windows build output::$tail"
+            exit $LASTEXITCODE
+          }
 
       - name: Upload installer
         uses: actions/upload-artifact@v4
@@ -31,4 +39,13 @@ jobs:
           name: nexus-windows-installer
           path: release/*.exe
           if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload build log on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nexus-windows-build-log
+          path: build-windows.log
+          if-no-files-found: ignore
           retention-days: 14
