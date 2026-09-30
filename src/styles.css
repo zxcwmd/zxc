@@ -89,7 +89,7 @@ button:disabled { cursor: not-allowed; opacity: .52; }
 
 .hero-card { position: relative; display: flex; min-height: 348px; overflow: hidden; align-items: stretch; padding: 35px 38px; isolation: isolate; background: #18241d; border: 1px solid rgba(190, 226, 194, .13); border-radius: 16px; box-shadow: 0 15px 45px rgba(0, 0, 0, .14); }
 .hero-art, .hero-shade { position: absolute; z-index: -1; inset: 0; }
-.hero-art { background-image: url('/voxel-world.png'); background-position: center 48%; background-size: cover; opacity: .9; transform: scale(1.015); }
+.hero-art { background-image: url('./assets/voxel-world.png'); background-position: center 48%; background-size: cover; opacity: .9; transform: scale(1.015); }
 .hero-shade { background: linear-gradient(90deg, rgba(8, 16, 12, .96) 0%, rgba(9, 17, 12, .86) 31%, rgba(10, 16, 12, .37) 66%, rgba(10, 14, 12, .1) 100%), linear-gradient(0deg, rgba(8, 14, 11, .74) 0%, transparent 46%, rgba(6, 11, 8, .1) 100%); }
 .hero-content { position: relative; z-index: 1; display: flex; width: 57%; flex-direction: column; align-items: flex-start; }
 .hero-eyebrow { display: flex; align-items: center; gap: 8px; margin: 4px 0 17px; color: #c8d8c7; font-family: var(--mono); font-size: 9px; letter-spacing: .1em; }

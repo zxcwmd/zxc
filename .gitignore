@@ -5,3 +5,4 @@ dist/
 .DS_Store
 *.log
 nexus-launcher.zip
+release/

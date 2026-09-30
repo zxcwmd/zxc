@@ -382,7 +382,7 @@ function App() {
             <ArrowUpRight size={16} />
           </button>
         </div>
-        <div className="sidebar-version"><span className="version-dot" /> UI preview <span>v0.1</span></div>
+        <div className="sidebar-version"><span className="version-dot" /> UI · DEMO <span>v0.2</span></div>
       </aside>
 
       <main className="main-shell">
@@ -396,7 +396,7 @@ function App() {
             <strong>{PAGE_TITLES[activePage]}</strong>
           </div>
           <div className="topbar-actions">
-            <div className="preview-badge"><span /> БРАУЗЕРНЫЙ ПРОТОТИП</div>
+            <div className="preview-badge"><span /> ДЕМО-РЕЖИМ</div>
             <button className="top-account-button" type="button" onClick={() => setModal({ type: 'auth' })}>
               <span className="top-avatar"><UserRound size={15} /></span>
               <span>Войти</span>
@@ -578,8 +578,8 @@ function HomePage({
             <span className="status-tag status-tag-muted"><span /> Не подключена</span>
           </div>
           <div className="runtime-check-list">
-            <div className="runtime-check-row"><span className="runtime-check-icon runtime-icon-ok"><Check size={13} /></span><span><strong>Интерфейс лаунчера</strong><small>Работает в режиме предпросмотра</small></span><span className="runtime-row-state">ГОТОВО</span></div>
-            <div className="runtime-check-row"><span className="runtime-check-icon runtime-icon-pending"><HardDrive size={13} /></span><span><strong>Java Runtime</strong><small>Будет проверена в desktop-версии</small></span><span className="runtime-row-state runtime-state-pending">НЕ ПРОВЕРЕНА</span></div>
+            <div className="runtime-check-row"><span className="runtime-check-icon runtime-icon-ok"><Check size={13} /></span><span><strong>Интерфейс лаунчера</strong><small>Интерфейс лаунчера активен</small></span><span className="runtime-row-state">ГОТОВО</span></div>
+            <div className="runtime-check-row"><span className="runtime-check-icon runtime-icon-pending"><HardDrive size={13} /></span><span><strong>Java Runtime</strong><small>Проверка Java пока не подключена</small></span><span className="runtime-row-state runtime-state-pending">НЕ ПРОВЕРЕНА</span></div>
             <div className="runtime-check-row"><span className="runtime-check-icon runtime-icon-pending"><UserRound size={13} /></span><span><strong>Аккаунт Microsoft</strong><small>Без авторизации запуск недоступен</small></span><span className="runtime-row-state runtime-state-pending">НЕ ПОДКЛЮЧЁН</span></div>
           </div>
           <button type="button" className="text-button runtime-settings-link" onClick={onOpenSettings}>Параметры запуска <ArrowRight size={15} /></button>
@@ -703,7 +703,7 @@ function BuildsPage({ profiles, selectedProfile, onChoose }: { profiles: GamePro
           );
         })}
         <button type="button" className="build-card build-add-card" onClick={() => onChoose('survival')}>
-          <span className="build-add-icon"><span>+</span></span><strong>Добавить сборку</strong><small>Импорт ZIP в desktop-версии</small><span className="build-add-preview">СКОРО</span>
+          <span className="build-add-icon"><span>+</span></span><strong>Добавить сборку</strong><small>Импорт ZIP позже</small><span className="build-add-preview">СКОРО</span>
         </button>
       </div>
       <div className="builds-bottom-note"><Sparkles size={15} /><span>Профиль хранит загрузчик, версию игры и параметры памяти. Выбор сохраняется локально.</span></div>
@@ -714,15 +714,15 @@ function BuildsPage({ profiles, selectedProfile, onChoose }: { profiles: GamePro
 function SettingsPage({ settings, onUpdate, onSave }: { settings: LauncherSettings; onUpdate: (patch: Partial<LauncherSettings>) => void; onSave: () => void }) {
   return (
     <div className="subpage settings-page">
-      <div className="page-heading-row"><div><div className="section-kicker">ПЕРСОНАЛИЗАЦИЯ</div><h1>Настройки</h1><p>Подготовь профиль запуска для будущей desktop-версии.</p></div><button type="button" className="button button-primary" onClick={onSave}><Check size={16} /> Сохранить</button></div>
+      <div className="page-heading-row"><div><div className="section-kicker">ПЕРСОНАЛИЗАЦИЯ</div><h1>Настройки</h1><p>Настрой профиль запуска и локальные параметры.</p></div><button type="button" className="button button-primary" onClick={onSave}><Check size={16} /> Сохранить</button></div>
       <div className="settings-layout">
         <section className="surface-card settings-card">
           <div className="settings-card-heading"><div className="settings-card-icon"><Monitor size={17} /></div><div><h2>Игровая среда</h2><p>Пути и ресурсы для будущего запуска</p></div><span className="settings-coming-soon">DESKTOP</span></div>
           <label className="form-label" htmlFor="game-directory">Папка игры</label>
           <div className="input-with-icon"><FolderOpen size={16} /><input id="game-directory" value={settings.gameDirectory} onChange={(event) => onUpdate({ gameDirectory: event.target.value })} placeholder="Например, ~/games/minecraft" /></div>
-          <span className="field-hint">Пока только сохраняется как настройка. Выбор папки станет доступен в desktop-сборке.</span>
+          <span className="field-hint">Сейчас путь только сохраняется. Нативный выбор папки появится позже.</span>
           <label className="form-label java-label" htmlFor="java-path">Путь к Java</label>
-          <div className="input-with-icon"><Activity size={16} /><input id="java-path" value={settings.javaPath} onChange={(event) => onUpdate({ javaPath: event.target.value })} placeholder="Автоматический поиск в desktop-версии" /></div>
+          <div className="input-with-icon"><Activity size={16} /><input id="java-path" value={settings.javaPath} onChange={(event) => onUpdate({ javaPath: event.target.value })} placeholder="Автоматический поиск появится позже" /></div>
           <span className="field-hint">Для современных версий Minecraft обычно нужна совместимая Java 21.</span>
           <div className="form-divider" />
           <div className="memory-heading"><div><strong>Оперативная память</strong><span>Выделено для игрового профиля</span></div><div className="memory-value">{settings.memory}<small> GB</small></div></div>
@@ -735,11 +735,11 @@ function SettingsPage({ settings, onUpdate, onSave }: { settings: LauncherSettin
           <section className="surface-card account-settings-card">
             <div className="settings-card-heading"><div className="settings-card-icon settings-account-icon"><UserRound size={17} /></div><div><h2>Аккаунт</h2><p>Авторизация Minecraft</p></div></div>
             <div className="account-connect-panel"><div className="account-connect-avatar"><UserRound size={20} /></div><div><strong>Не подключён</strong><span>Требуется Microsoft OAuth</span></div><span className="account-offline-dot" /></div>
-            <div className="account-hint"><ShieldCheck size={15} /><span>Вход подключается только через официальный Microsoft OAuth в desktop-версии.</span></div>
+            <div className="account-hint"><ShieldCheck size={15} /><span>Microsoft OAuth пока не подключён; вход должен проходить только через официальный сервис.</span></div>
             <button type="button" className="button button-quiet account-connect-button" disabled><UserRound size={15} /> Подключить аккаунт <span>СКОРО</span></button>
           </section>
           <section className="surface-card settings-info-card">
-            <div className="settings-info-symbol"><Zap size={18} /></div><h3>Всё останется<br />на твоём устройстве.</h3><p>Профили и переключатели хранятся локально в браузере. Пароли и токены не запрашиваются.</p><div className="settings-info-foot"><span className="local-dot" /> ЛОКАЛЬНОЕ ХРАНЕНИЕ</div>
+            <div className="settings-info-symbol"><Zap size={18} /></div><h3>Всё останется<br />на твоём устройстве.</h3><p>Профили и переключатели хранятся локально. Пароли и токены не запрашиваются.</p><div className="settings-info-foot"><span className="local-dot" /> ЛОКАЛЬНОЕ ХРАНЕНИЕ</div>
           </section>
         </aside>
       </div>
@@ -760,13 +760,13 @@ function LaunchDialog({ onClose, onOpenSettings }: { onClose: () => void; onOpen
     <>
       <div className="dialog-top"><div className="dialog-icon dialog-icon-green"><Play size={18} fill="currentColor" /></div><button className="modal-close" type="button" onClick={onClose} aria-label="Закрыть"><X size={18} /></button></div>
       <div className="dialog-eyebrow">ПОДГОТОВКА К СЕССИИ</div><h2>Почти готово</h2>
-      <p className="dialog-copy">Сейчас открыт браузерный прототип: он настраивает профили, но не запускает игровой процесс.</p>
+      <p className="dialog-copy">Эта версия настраивает интерфейс и профили, но пока не запускает игровой процесс.</p>
       <div className="launch-checklist">
         <div className="launch-check-row"><span className="launch-check-ready"><Check size={13} /></span><span><strong>Профиль игры</strong><small>Можно выбрать и настроить</small></span><b>ГОТОВО</b></div>
-        <div className="launch-check-row"><span className="launch-check-pending"><HardDrive size={13} /></span><span><strong>Java и файлы игры</strong><small>Нужна desktop-оболочка</small></span><b className="check-state-pending">ОЖИДАЕТ</b></div>
+        <div className="launch-check-row"><span className="launch-check-pending"><HardDrive size={13} /></span><span><strong>Java и файлы игры</strong><small>Java и файлы игры пока не подключены</small></span><b className="check-state-pending">ОЖИДАЕТ</b></div>
         <div className="launch-check-row"><span className="launch-check-pending"><UserRound size={13} /></span><span><strong>Вход Microsoft</strong><small>Только через официальный OAuth</small></span><b className="check-state-pending">ОЖИДАЕТ</b></div>
       </div>
-      <div className="dialog-note"><Info size={15} /><span>В следующем этапе можно подключить Electron/Tauri, Java Runtime и авторизацию Microsoft.</span></div>
+      <div className="dialog-note"><Info size={15} /><span>Electron-оболочка готова; запуск игры, Java Runtime и официальный Microsoft OAuth пока не подключены.</span></div>
       <div className="dialog-actions"><button type="button" className="button button-quiet" onClick={onClose}>Понятно</button><button type="button" className="button button-primary" onClick={onOpenSettings}>Параметры запуска <ArrowRight size={15} /></button></div>
     </>
   );
@@ -777,9 +777,9 @@ function AuthDialog({ onClose }: { onClose: () => void }) {
     <>
       <div className="dialog-top"><div className="dialog-icon dialog-icon-blue"><UserRound size={18} /></div><button className="modal-close" type="button" onClick={onClose} aria-label="Закрыть"><X size={18} /></button></div>
       <div className="dialog-eyebrow">БЕЗОПАСНОЕ ПОДКЛЮЧЕНИЕ</div><h2>Аккаунт Microsoft</h2>
-      <p className="dialog-copy">Вход в Minecraft должен проходить через официальный Microsoft OAuth. Браузерный прототип не собирает пароли, токены и игровые данные.</p>
-      <div className="auth-provider-card"><div className="provider-mark">M</div><div><strong>Microsoft account</strong><span>OAuth-интеграция будет добавлена в desktop-сборке</span></div><BadgeCheck size={18} /></div>
-      <div className="dialog-note"><ShieldCheck size={15} /><span>Не вводи пароль от Microsoft в сторонние формы. Авторизация появится только в нативном окне входа.</span></div>
+      <p className="dialog-copy">Вход в Minecraft должен проходить через официальный Microsoft OAuth. Текущая версия не собирает пароли, токены и игровые данные; OAuth ещё не подключён.</p>
+      <div className="auth-provider-card"><div className="provider-mark">M</div><div><strong>Microsoft account</strong><span>OAuth-интеграция пока не подключена</span></div><BadgeCheck size={18} /></div>
+      <div className="dialog-note"><ShieldCheck size={15} /><span>Не вводи пароль от Microsoft в сторонние формы. Авторизация должна быть реализована только через официальный нативный процесс входа.</span></div>
       <div className="dialog-actions"><button type="button" className="button button-quiet" onClick={onClose}>Закрыть</button><button type="button" className="button button-primary" onClick={onClose}>Понятно <Check size={15} /></button></div>
     </>
   );

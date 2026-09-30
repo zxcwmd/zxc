@@ -1,23 +1,62 @@
 {
   "name": "nexus-craft-launcher",
+  "version": "0.2.0",
+  "description": "NEXUS Craft Launcher desktop UI prototype",
+  "author": "NEXUS",
   "private": true,
-  "version": "0.1.0",
   "type": "module",
+  "main": "electron/main.cjs",
   "scripts": {
     "dev": "vite --host 0.0.0.0",
     "build": "tsc -b && vite build",
-    "preview": "vite preview --host 0.0.0.0"
-  },
-  "dependencies": {
-    "lucide-react": "^0.468.0",
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1"
+    "preview": "vite preview --host 0.0.0.0",
+    "desktop:dev": "concurrently -k -n WEB,DESKTOP \"npm:dev\" \"wait-on http://localhost:5173 && electron .\"",
+    "dist:win": "npm run build && electron-builder --win nsis --x64"
   },
   "devDependencies": {
+    "lucide-react": "^0.468.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
     "@vitejs/plugin-react": "^4.3.4",
+    "concurrently": "^10.0.5",
+    "electron": "^44.5.1",
+    "electron-builder": "^26.15.3",
     "typescript": "~5.6.3",
-    "vite": "^6.0.1"
+    "vite": "^6.0.1",
+    "wait-on": "^9.5.1"
+  },
+  "build": {
+    "appId": "com.nexuscraft.launcher",
+    "productName": "NEXUS Craft Launcher",
+    "asar": true,
+    "directories": {
+      "output": "release",
+      "buildResources": "build"
+    },
+    "files": [
+      "dist/**/*",
+      "electron/**/*",
+      "package.json"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": ["x64"]
+        }
+      ],
+      "icon": "build/icon.ico",
+      "artifactName": "NEXUS-Launcher-Setup-${version}-${arch}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "deleteAppDataOnUninstall": false
+    }
   }
 }
