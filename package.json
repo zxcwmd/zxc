@@ -1,6 +1,6 @@
 {
   "name": "bloom-client",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Bloom Client desktop UI prototype",
   "author": "Bloom Client",
   "private": true,

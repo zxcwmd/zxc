@@ -488,10 +488,14 @@ function HomePage({
       <section className="hero-card">
         <div className="hero-art" />
         <div className="hero-shade" />
+        <div className="hero-tree" aria-hidden="true" />
+        <div className="petal-field" aria-hidden="true">
+          {Array.from({ length: 18 }, (_, index) => <span key={index} className={`floating-petal petal-tone-${index % 4}`} />)}
+        </div>
         <div className="hero-content">
-          <div className="hero-eyebrow"><span className="hero-eyebrow-dot" /> МИР НАЧИНАЕТСЯ ЗДЕСЬ</div>
-          <h1>Твой мир.<br /><span>Твои правила.</span></h1>
-          <p>Собери игру под себя: профили, комфортные настройки и всё нужное для следующего приключения.</p>
+          <div className="hero-eyebrow"><span className="hero-eyebrow-dot" /> ВИШНЁВЫЙ ЛЕС · ТИХИЙ ВЕЧЕР</div>
+          <h1>Расцветай<br /><span>в своём мире.</span></h1>
+          <p>Профили, любимые сборки и настройки — в одном тихом месте перед новым приключением.</p>
           <div className="hero-actions">
             <button className="button button-primary hero-play-button" type="button" onClick={onOpenLaunch}>
               <Play size={16} fill="currentColor" />
