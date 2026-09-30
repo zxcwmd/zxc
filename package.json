@@ -1,8 +1,8 @@
 {
-  "name": "nexus-craft-launcher",
-  "version": "0.2.0",
-  "description": "NEXUS Craft Launcher desktop UI prototype",
-  "author": "NEXUS",
+  "name": "bloom-client",
+  "version": "0.3.0",
+  "description": "Bloom Client desktop UI prototype",
+  "author": "Bloom Client",
   "private": true,
   "type": "module",
   "main": "electron/main.cjs",
@@ -28,8 +28,8 @@
     "wait-on": "^9.5.1"
   },
   "build": {
-    "appId": "com.nexuscraft.launcher",
-    "productName": "NEXUS Craft Launcher",
+    "appId": "com.bloomclient.desktop",
+    "productName": "Bloom Client",
     "asar": true,
     "directories": {
       "output": "release",
@@ -48,7 +48,7 @@
         }
       ],
       "icon": "build/icon.ico",
-      "artifactName": "NEXUS-Launcher-Setup-${version}-${arch}.${ext}"
+      "artifactName": "Bloom-Client-Setup-${version}-${arch}.${ext}"
     },
     "nsis": {
       "oneClick": false,

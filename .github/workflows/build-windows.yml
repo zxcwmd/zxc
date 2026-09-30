@@ -1,4 +1,4 @@
-name: Windows desktop build
+name: Bloom Client Windows build
 
 on:
   workflow_dispatch:
@@ -36,7 +36,7 @@ jobs:
       - name: Upload installer
         uses: actions/upload-artifact@v7
         with:
-          name: nexus-windows-installer
+          name: bloom-client-windows-installer
           path: release/*.exe
           if-no-files-found: error
           retention-days: 14
@@ -45,7 +45,7 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@v7
         with:
-          name: nexus-windows-build-log
+          name: bloom-client-windows-build-log
           path: build-windows.log
           if-no-files-found: ignore
           retention-days: 14

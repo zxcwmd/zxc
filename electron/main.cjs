@@ -12,7 +12,7 @@ function createWindow() {
     show: false,
     autoHideMenuBar: true,
     backgroundColor: '#090d0c',
-    title: 'NEXUS Craft Launcher',
+    title: 'Bloom Client',
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,
@@ -32,7 +32,7 @@ function createWindow() {
 
 app.whenReady().then(() => {
   if (process.platform === 'win32') {
-    app.setAppUserModelId('com.nexuscraft.launcher');
+    app.setAppUserModelId('com.bloomclient.desktop');
   }
 
   createWindow();

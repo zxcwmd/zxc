@@ -4,7 +4,6 @@ import {
   Activity,
   ArrowRight,
   ArrowUpRight,
-  BadgeCheck,
   Boxes,
   Check,
   ChevronDown,
@@ -218,6 +217,7 @@ function IconMark() {
       <span className="brand-cube brand-cube-top" />
       <span className="brand-cube brand-cube-left" />
       <span className="brand-cube brand-cube-right" />
+      <span className="brand-cube brand-cube-bottom" />
       <span className="brand-cube brand-cube-center" />
     </div>
   );
@@ -243,20 +243,20 @@ function Switch({ checked, label, onChange }: { checked: boolean; label: string;
 
 function App() {
   const [activePage, setActivePage] = useState<PageId>('home');
-  const [selectedProfileId, setSelectedProfileId] = useState(() => readStorage('nexus-profile-id', 'survival'));
-  const [modules, setModules] = useState<AutomationModule[]>(() => readStorage('nexus-modules', DEFAULT_MODULES));
-  const [settings, setSettings] = useState<LauncherSettings>(() => readStorage('nexus-settings', DEFAULT_SETTINGS));
-  const [moduleConfigs, setModuleConfigs] = useState<Record<string, Record<string, string>>>(() => readStorage('nexus-module-configs', {}));
+  const [selectedProfileId, setSelectedProfileId] = useState(() => readStorage('bloom-profile-id', 'survival'));
+  const [modules, setModules] = useState<AutomationModule[]>(() => readStorage('bloom-modules', DEFAULT_MODULES));
+  const [settings, setSettings] = useState<LauncherSettings>(() => readStorage('bloom-settings', DEFAULT_SETTINGS));
+  const [moduleConfigs, setModuleConfigs] = useState<Record<string, Record<string, string>>>(() => readStorage('bloom-module-configs', {}));
   const [modal, setModal] = useState<ModalState>(null);
   const [toast, setToast] = useState('');
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const selectedProfile = PROFILES.find((profile) => profile.id === selectedProfileId) ?? PROFILES[0];
   const enabledCount = modules.filter((module) => module.enabled).length;
 
-  useEffect(() => localStorage.setItem('nexus-profile-id', selectedProfileId), [selectedProfileId]);
-  useEffect(() => localStorage.setItem('nexus-modules', JSON.stringify(modules)), [modules]);
-  useEffect(() => localStorage.setItem('nexus-settings', JSON.stringify(settings)), [settings]);
-  useEffect(() => localStorage.setItem('nexus-module-configs', JSON.stringify(moduleConfigs)), [moduleConfigs]);
+  useEffect(() => localStorage.setItem('bloom-profile-id', selectedProfileId), [selectedProfileId]);
+  useEffect(() => localStorage.setItem('bloom-modules', JSON.stringify(modules)), [modules]);
+  useEffect(() => localStorage.setItem('bloom-settings', JSON.stringify(settings)), [settings]);
+  useEffect(() => localStorage.setItem('bloom-module-configs', JSON.stringify(moduleConfigs)), [moduleConfigs]);
 
   useEffect(() => {
     if (!toast) return;
@@ -306,7 +306,7 @@ function App() {
     );
     const payload = {
       schemaVersion: 1,
-      launcher: 'NEXUS',
+      launcher: 'Bloom Client',
       profile: selectedProfile,
       launcherSettings: settings,
       automationScope: 'singleplayer-or-explicitly-authorized-servers',
@@ -318,7 +318,7 @@ function App() {
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `nexus-${selectedProfile.id}-profile.json`;
+    link.download = `bloom-${selectedProfile.id}-profile.json`;
     link.click();
     window.setTimeout(() => URL.revokeObjectURL(url), 1000);
     showToast('JSON-профиль скачан');
@@ -335,11 +335,11 @@ function App() {
   return (
     <div className="app-shell">
       <aside className={`sidebar ${mobileNavOpen ? 'sidebar-open' : ''}`}>
-        <button className="brand-lockup" type="button" onClick={() => changePage('home')} aria-label="NEXUS — на главную">
+        <button className="brand-lockup" type="button" onClick={() => changePage('home')} aria-label="Bloom Client — на главную">
           <IconMark />
           <span className="brand-wordmark">
-            <span>NEXUS</span>
-            <small>CRAFT LAUNCHER</small>
+            <span>BLOOM</span>
+            <small>MINECRAFT CLIENT</small>
           </span>
         </button>
 
@@ -734,8 +734,8 @@ function SettingsPage({ settings, onUpdate, onSave }: { settings: LauncherSettin
         <aside className="settings-side-column">
           <section className="surface-card account-settings-card">
             <div className="settings-card-heading"><div className="settings-card-icon settings-account-icon"><UserRound size={17} /></div><div><h2>Аккаунт</h2><p>Авторизация Minecraft</p></div></div>
-            <div className="account-connect-panel"><div className="account-connect-avatar"><UserRound size={20} /></div><div><strong>Не подключён</strong><span>Требуется Microsoft OAuth</span></div><span className="account-offline-dot" /></div>
-            <div className="account-hint"><ShieldCheck size={15} /><span>Microsoft OAuth пока не подключён; вход должен проходить только через официальный сервис.</span></div>
+            <div className="account-connect-panel"><div className="account-connect-avatar"><UserRound size={20} /></div><div><strong>Вход не подключён</strong><span>Microsoft OAuth / Ely.by</span></div><span className="account-offline-dot" /></div>
+            <div className="account-hint"><ShieldCheck size={15} /><span>Microsoft — только через официальный OAuth. Ely.by — лишь для серверов, где он явно разрешён. Интеграции пока не подключены.</span></div>
             <button type="button" className="button button-quiet account-connect-button" disabled><UserRound size={15} /> Подключить аккаунт <span>СКОРО</span></button>
           </section>
           <section className="surface-card settings-info-card">
@@ -764,7 +764,7 @@ function LaunchDialog({ onClose, onOpenSettings }: { onClose: () => void; onOpen
       <div className="launch-checklist">
         <div className="launch-check-row"><span className="launch-check-ready"><Check size={13} /></span><span><strong>Профиль игры</strong><small>Можно выбрать и настроить</small></span><b>ГОТОВО</b></div>
         <div className="launch-check-row"><span className="launch-check-pending"><HardDrive size={13} /></span><span><strong>Java и файлы игры</strong><small>Java и файлы игры пока не подключены</small></span><b className="check-state-pending">ОЖИДАЕТ</b></div>
-        <div className="launch-check-row"><span className="launch-check-pending"><UserRound size={13} /></span><span><strong>Вход Microsoft</strong><small>Только через официальный OAuth</small></span><b className="check-state-pending">ОЖИДАЕТ</b></div>
+        <div className="launch-check-row"><span className="launch-check-pending"><UserRound size={13} /></span><span><strong>Провайдер аккаунта</strong><small>Microsoft OAuth или разрешённый Ely.by</small></span><b className="check-state-pending">ОЖИДАЕТ</b></div>
       </div>
       <div className="dialog-note"><Info size={15} /><span>Electron-оболочка готова; запуск игры, Java Runtime и официальный Microsoft OAuth пока не подключены.</span></div>
       <div className="dialog-actions"><button type="button" className="button button-quiet" onClick={onClose}>Понятно</button><button type="button" className="button button-primary" onClick={onOpenSettings}>Параметры запуска <ArrowRight size={15} /></button></div>
@@ -773,14 +773,29 @@ function LaunchDialog({ onClose, onOpenSettings }: { onClose: () => void; onOpen
 }
 
 function AuthDialog({ onClose }: { onClose: () => void }) {
+  const [provider, setProvider] = useState<'microsoft' | 'elyby'>('microsoft');
+
   return (
     <>
       <div className="dialog-top"><div className="dialog-icon dialog-icon-blue"><UserRound size={18} /></div><button className="modal-close" type="button" onClick={onClose} aria-label="Закрыть"><X size={18} /></button></div>
-      <div className="dialog-eyebrow">БЕЗОПАСНОЕ ПОДКЛЮЧЕНИЕ</div><h2>Аккаунт Microsoft</h2>
-      <p className="dialog-copy">Вход в Minecraft должен проходить через официальный Microsoft OAuth. Текущая версия не собирает пароли, токены и игровые данные; OAuth ещё не подключён.</p>
-      <div className="auth-provider-card"><div className="provider-mark">M</div><div><strong>Microsoft account</strong><span>OAuth-интеграция пока не подключена</span></div><BadgeCheck size={18} /></div>
-      <div className="dialog-note"><ShieldCheck size={15} /><span>Не вводи пароль от Microsoft в сторонние формы. Авторизация должна быть реализована только через официальный нативный процесс входа.</span></div>
-      <div className="dialog-actions"><button type="button" className="button button-quiet" onClick={onClose}>Закрыть</button><button type="button" className="button button-primary" onClick={onClose}>Понятно <Check size={15} /></button></div>
+      <div className="dialog-eyebrow">BLOOM ID · АККАУНТЫ</div><h2>Выбери способ входа</h2>
+      <p className="dialog-copy">Поддерживаются только реальные аккаунты. Microsoft нужен для официальной игры; Ely.by подходит только серверам и сборкам, которые явно используют эту систему авторизации.</p>
+      <div className="login-provider-list">
+        <button type="button" className={`login-provider-option ${provider === 'microsoft' ? 'login-provider-selected' : ''}`} onClick={() => setProvider('microsoft')}>
+          <div className="provider-mark provider-mark-microsoft">M</div>
+          <span className="login-provider-copy"><strong>Microsoft</strong><small>Официальная учётная запись Minecraft</small></span>
+          <span className="provider-status">СКОРО</span>
+          {provider === 'microsoft' && <span className="provider-selected-check"><Check size={13} /></span>}
+        </button>
+        <button type="button" className={`login-provider-option ${provider === 'elyby' ? 'login-provider-selected' : ''}`} onClick={() => setProvider('elyby')}>
+          <div className="provider-mark provider-mark-ely">E</div>
+          <span className="login-provider-copy"><strong>Ely.by</strong><small>Только для совместимых серверов</small></span>
+          <span className="provider-status">СКОРО</span>
+          {provider === 'elyby' && <span className="provider-selected-check"><Check size={13} /></span>}
+        </button>
+      </div>
+      <div className="dialog-note"><ShieldCheck size={15} /><span>{provider === 'elyby' ? 'Интеграция Ely.by не подключена. Она может использоваться только с серверами, где этот провайдер разрешён.' : 'Microsoft OAuth не подключён. Не вводи пароль в сторонние формы: вход должен идти через официальный процесс Microsoft.'} Вход только по нику недоступен.</span></div>
+      <div className="dialog-actions"><button type="button" className="button button-quiet" onClick={onClose}>Закрыть</button><button type="button" className="button button-primary" disabled>Авторизация пока недоступна</button></div>
     </>
   );
 }
