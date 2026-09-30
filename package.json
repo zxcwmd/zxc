@@ -1,7 +1,7 @@
 {
   "name": "bloom-client",
-  "version": "0.4.0",
-  "description": "Bloom Client desktop UI prototype",
+  "version": "0.5.0",
+  "description": "Bloom Client — Minecraft launcher",
   "author": "Bloom Client",
   "private": true,
   "type": "module",
@@ -14,15 +14,15 @@
     "dist:win": "npm run build && electron-builder --win nsis --x64 --publish never"
   },
   "devDependencies": {
-    "lucide-react": "^0.468.0",
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1",
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
     "@vitejs/plugin-react": "^4.3.4",
     "concurrently": "^10.0.5",
     "electron": "^44.5.1",
     "electron-builder": "^26.15.3",
+    "lucide-react": "^0.468.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
     "typescript": "~5.6.3",
     "vite": "^6.0.1",
     "wait-on": "^9.5.1"
@@ -44,7 +44,9 @@
       "target": [
         {
           "target": "nsis",
-          "arch": ["x64"]
+          "arch": [
+            "x64"
+          ]
         }
       ],
       "icon": "build/icon.ico",
@@ -58,5 +60,9 @@
       "createStartMenuShortcut": true,
       "deleteAppDataOnUninstall": false
     }
+  },
+  "dependencies": {
+    "eml-lib": "^2.7.3",
+    "skinview3d": "^3.4.2"
   }
 }
