@@ -247,10 +247,12 @@ function BrandGlyph() {
 function App() {
   const [activePage, setActivePage] = useState<PageId>('home');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [catalogType, setCatalogType] = useState<ContentType>('mod');
   const [bootstrap, setBootstrap] = useState<BootstrapState | null>(null);
   const [versions, setVersions] = useState<GameVersion[]>([]);
   const [loadingApp, setLoadingApp] = useState(true);
   const [versionsError, setVersionsError] = useState('');
+  const [bootstrapError, setBootstrapError] = useState('');
   const [modal, setModal] = useState<ModalId>(null);
   const [toast, setToast] = useState('');
   const [isBusy, setIsBusy] = useState(false);
@@ -273,11 +275,18 @@ function App() {
 
   const refreshBootstrap = useCallback(async () => {
     if (!window.bloom) return null;
-    const next = await window.bloom.getBootstrap();
-    setBootstrap(next);
-    setJavaPath(next.javaPath);
-    setMemoryGb((current) => Math.min(Math.max(2, current), Math.max(2, Math.floor(next.totalMemoryMb / 1024) - 2)));
-    return next;
+    try {
+      const next = await window.bloom.getBootstrap();
+      setBootstrap(next);
+      setBootstrapError('');
+      setJavaPath(next.javaPath);
+      setMemoryGb((current) => Math.min(Math.max(2, current), Math.max(2, Math.floor(next.totalMemoryMb / 1024) - 2)));
+      return next;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Не удалось подключить системные функции лаунчера.';
+      setBootstrapError(message);
+      throw error;
+    }
   }, []);
 
   const loadVersions = useCallback(async () => {
@@ -356,6 +365,11 @@ function App() {
     setMobileMenuOpen(false);
   };
 
+  const openCatalog = (type: ContentType = 'mod') => {
+    setCatalogType(type);
+    changePage('catalog');
+  };
+
   const setActiveInstance = async (instanceId: string) => {
     if (!window.bloom) return;
     try {
@@ -385,12 +399,15 @@ function App() {
     }
   };
 
-  const beginLaunch = async () => {
+  const beginLaunch = async (requestedInstanceId?: string) => {
     if (!desktop || !window.bloom) {
       notify('Запуск и установка Minecraft работают в установленной desktop-версии.');
       return;
     }
-    if (!activeInstance) {
+    const targetInstance = requestedInstanceId
+      ? instances.find((item) => item.id === requestedInstanceId) ?? null
+      : activeInstance;
+    if (!targetInstance) {
       setModal('instance');
       return;
     }
@@ -398,10 +415,14 @@ function App() {
       setModal('auth');
       return;
     }
-    setLauncherEvent({ kind: 'phase', message: 'Проверяем аккаунт и готовим запуск…' });
+    setLauncherEvent({ kind: 'phase', message: `Готовим запуск профиля «${targetInstance.name}»…` });
     setModal('launch');
     try {
-      await window.bloom.launchGame({ instanceId: activeInstance.id, memoryGb });
+      if (targetInstance.id !== activeInstance?.id) {
+        await window.bloom.setActiveInstance(targetInstance.id);
+        await refreshBootstrap();
+      }
+      await window.bloom.launchGame({ instanceId: targetInstance.id, memoryGb });
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Не удалось запустить Minecraft.';
       setLauncherEvent({ kind: 'error', message });
@@ -411,10 +432,15 @@ function App() {
 
   const handleAccountChange = async (account: AccountSummary) => {
     if (!window.bloom) return;
-    await window.bloom.setActiveAccount(account.id);
-    await refreshBootstrap();
-    setModal(null);
-    setActivePage('home');
+    try {
+      await window.bloom.setActiveAccount(account.id);
+      await refreshBootstrap();
+      setModal(null);
+      setActivePage('home');
+    } catch (error) {
+      notify(error instanceof Error ? error.message : 'Не удалось выбрать аккаунт.');
+      throw error;
+    }
   };
 
   const updatePerformance = (patch: Partial<PerformanceSettings>) => setPerformance((current) => ({ ...current, ...patch }));
@@ -435,7 +461,7 @@ function App() {
         window.bloom.savePerformanceSettings({ instanceId: activeInstance.id, settings: performance }),
         window.bloom.saveHudSettings({ instanceId: activeInstance.id, settings: hud }),
       ]);
-      notify('Параметры производительности записаны в options.txt профиля.');
+      notify('Производительность сохранена в options.txt, параметры HUD — в Bloom config.');
     } catch (error) {
       notify(error instanceof Error ? error.message : 'Не удалось сохранить игровые настройки.');
     } finally {
@@ -459,7 +485,7 @@ function App() {
             onOpenAuth={() => setModal('auth')}
             onCreate={() => setModal('instance')}
             onOpenInstances={() => changePage('instances')}
-            onOpenCatalog={() => changePage('catalog')}
+            onOpenCatalog={openCatalog}
             onSelectInstance={setActiveInstance}
           />
         );
@@ -473,6 +499,7 @@ function App() {
             isBusy={isBusy}
             onCreate={() => setModal('instance')}
             onSelect={setActiveInstance}
+            onPlay={(instanceId) => void beginLaunch(instanceId)}
             onRefresh={refreshBootstrap}
             onNotify={notify}
           />
@@ -483,6 +510,8 @@ function App() {
             activeInstance={activeInstance}
             versions={versions}
             desktop={desktop}
+            initialType={catalogType}
+            onTypeChange={setCatalogType}
             onNotify={notify}
             onRefresh={refreshBootstrap}
             onCreateInstance={() => setModal('instance')}
@@ -499,7 +528,7 @@ function App() {
             onPerformanceChange={updatePerformance}
             onHudChange={updateHud}
             onApply={() => void applyClientSettings()}
-            onOpenCatalog={() => changePage('catalog')}
+            onOpenCatalog={() => openCatalog('mod')}
           />
         );
       case 'skins':
@@ -596,7 +625,7 @@ function App() {
           <div className="crumb"><span>Bloom Client</span><ChevronRight size={14} /><strong>{title}</strong></div>
           <div className="topbar-right">
             {desktop ? (
-              <span className="connection-pill"><span className="online-dot" /> GAME SERVICES READY</span>
+              <span className="connection-pill"><span className="online-dot" /> BLOOM DESKTOP</span>
             ) : (
               <span className="connection-pill connection-preview"><span /> WEB PREVIEW</span>
             )}
@@ -610,10 +639,11 @@ function App() {
           </div>
         </header>
 
-        {!desktop && <div className="preview-banner"><MonitorPlay size={15} /><span>Это интерактивный preview. Авторизация, запись файлов и запуск доступны в установленном приложении.</span><button type="button" onClick={() => notify('Windows x64 installer собирается в GitHub Actions.')}>Подробнее</button></div>}
+        {!desktop && <div className="preview-banner"><MonitorPlay size={15} /><span>Это интерактивный preview. Авторизация, запись файлов и запуск доступны в установленном приложении.</span><button type="button" onClick={() => void openExternal('https://github.com/zxcwmd/zxc/releases/tag/v0.5.1-preview.1')}>Скачать приложение</button></div>}
         <div className="content-scroll">
           {loadingApp && <div className="loading-line"><span />Подготавливаем библиотеку Bloom…</div>}
-          {versionsError && <div className="inline-warning"><CircleHelp size={16} /><span>Список версий Minecraft временно недоступен. Проверьте подключение к интернету и обновите экран.</span></div>}
+          {versionsError && <div className="inline-warning"><CircleHelp size={16} /><span>Список версий Minecraft временно недоступен. Проверьте подключение к интернету и повторите попытку.</span><button type="button" onClick={() => void loadVersions()}>Повторить</button></div>}
+          {bootstrapError && <div className="inline-warning bootstrap-warning"><CircleHelp size={16} /><span>Не удалось подключить функции лаунчера: {bootstrapError}</span><button type="button" onClick={() => void refreshBootstrap().catch(() => {})}>Повторить</button></div>}
           {renderPage()}
         </div>
       </main>
@@ -674,7 +704,7 @@ function HomePage({
   onOpenAuth: () => void;
   onCreate: () => void;
   onOpenInstances: () => void;
-  onOpenCatalog: () => void;
+  onOpenCatalog: (type: ContentType) => void;
   onSelectInstance: (id: string) => void;
 }) {
   const latestRelease = versions.find((version) => version.type === 'release')?.id ?? '—';
@@ -701,7 +731,7 @@ function HomePage({
           <div className="hero-avatar-caption"><span className="caption-label">{account ? 'СЕЙЧАС В ИГРЕ' : '3D SKIN PREVIEW'}</span><strong>{account?.name ?? 'Bloom Explorer'}</strong><span className="avatar-caption-dot"><i />{account ? providerLabel(account.provider) : 'Пример модели'}</span></div>
           <div className="floating-chip chip-spark"><Sparkles size={14} />Bloom ready</div>
         </div>
-        <div className="hero-bottom-line"><span>v0.5.0</span><span>WINDOWS · JAVA EDITION</span><span>CRAFTED FOR YOUR NEXT WORLD <span className="hero-line-dot">✳</span></span></div>
+        <div className="hero-bottom-line"><span>v0.5.1</span><span>WINDOWS · JAVA EDITION</span><span>CRAFTED FOR YOUR NEXT WORLD <span className="hero-line-dot">✳</span></span></div>
       </section>
 
       <div className="home-section-heading">
@@ -725,8 +755,8 @@ function HomePage({
 
         <section className="quick-panel">
           <div className="card-topline"><span className="section-label">БЫСТРЫЙ СТАРТ</span><span className="quick-badge"><Sparkles size={12} /> BLOOM</span></div>
-          <button className="quick-row" type="button" onClick={onOpenCatalog}><span className="quick-row-icon quick-purple"><Package size={17} /></span><span><strong>Найти моды</strong><small>Каталог Modrinth</small></span><ChevronRight size={16} /></button>
-          <button className="quick-row" type="button" onClick={onOpenCatalog}><span className="quick-row-icon quick-green"><Paintbrush2 size={17} /></span><span><strong>Обновить текстуры</strong><small>Ресурспаки и атмосфера</small></span><ChevronRight size={16} /></button>
+          <button className="quick-row" type="button" onClick={() => onOpenCatalog('mod')}><span className="quick-row-icon quick-purple"><Package size={17} /></span><span><strong>Найти моды</strong><small>Каталог Modrinth</small></span><ChevronRight size={16} /></button>
+          <button className="quick-row" type="button" onClick={() => onOpenCatalog('resourcepack')}><span className="quick-row-icon quick-green"><Paintbrush2 size={17} /></span><span><strong>Обновить текстуры</strong><small>Ресурспаки и атмосфера</small></span><ChevronRight size={16} /></button>
           <button className="quick-row" type="button" onClick={onOpenAuth}><span className="quick-row-icon quick-blue"><LockKeyhole size={17} /></span><span><strong>{account ? 'Аккаунт подключён' : 'Безопасный вход'}</strong><small>{account ? providerLabel(account.provider) : 'Microsoft или Ely.by'}</small></span><ChevronRight size={16} /></button>
           <div className="quick-foot"><span><ShieldCheck size={14} />Без никнейм-входа и обходов</span><span>Последний релиз {latestRelease}</span></div>
         </section>
@@ -746,6 +776,7 @@ function InstancesPage({
   isBusy,
   onCreate,
   onSelect,
+  onPlay,
   onRefresh,
   onNotify,
 }: {
@@ -756,6 +787,7 @@ function InstancesPage({
   isBusy: boolean;
   onCreate: () => void;
   onSelect: (id: string) => void;
+  onPlay: (id: string) => void;
   onRefresh: () => Promise<BootstrapState | null>;
   onNotify: (message: string) => void;
 }) {
@@ -788,7 +820,7 @@ function InstancesPage({
           {visibleInstances.map((instance) => (
             <article className={`profile-card ${instance.id === activeInstance?.id ? 'profile-card-active' : ''}`} key={instance.id}>
               <div className="profile-card-art"><div className={`profile-art-orb art-${instance.loader}`} /><span className="profile-art-stamp">BLOOM / {LOADER_LABELS[instance.loader].toUpperCase()}</span><div className="profile-art-block"><Box size={38} strokeWidth={1.15} /></div><span className={`profile-installed ${instance.installed ? 'installed' : ''}`}><i />{instance.installed ? 'Installed' : 'Not installed'}</span></div>
-              <div className="profile-card-body"><div className="profile-card-title"><div><h3>{instance.name}</h3><p>{displayVersion(instance.version, versions)} <span>·</span> {LOADER_LABELS[instance.loader]}</p></div><button className="icon-button" aria-label={`Удалить профиль ${instance.name}`} type="button" onClick={() => void removeInstance(instance)} disabled={!desktop || deletingId === instance.id}><Trash2 size={15} /></button></div><div className="profile-card-stats"><span><Package size={14} />{instance.contentCount ?? 0} модов</span><span><Clock3 size={14} />Создан {compactDate(instance.createdAt)}</span></div><div className="profile-card-actions"><button className={instance.id === activeInstance?.id ? 'button button-primary' : 'button button-outline'} type="button" onClick={() => onSelect(instance.id)} disabled={!desktop}>{instance.id === activeInstance?.id ? <><Check size={15} />Активный профиль</> : <>Выбрать <ArrowRight size={15} /></>}</button><button className="profile-play" type="button" aria-label="Запустить профиль" onClick={() => onSelect(instance.id)}><Play size={15} fill="currentColor" /></button></div></div>
+              <div className="profile-card-body"><div className="profile-card-title"><div><h3>{instance.name}</h3><p>{displayVersion(instance.version, versions)} <span>·</span> {LOADER_LABELS[instance.loader]}</p></div><button className="icon-button" aria-label={`Удалить профиль ${instance.name}`} type="button" onClick={() => void removeInstance(instance)} disabled={!desktop || deletingId === instance.id}><Trash2 size={15} /></button></div><div className="profile-card-stats"><span><Package size={14} />{instance.contentCount ?? 0} модов</span><span><Clock3 size={14} />Создан {compactDate(instance.createdAt)}</span></div><div className="profile-card-actions"><button className={instance.id === activeInstance?.id ? 'button button-primary' : 'button button-outline'} type="button" onClick={() => onSelect(instance.id)} disabled={!desktop}>{instance.id === activeInstance?.id ? <><Check size={15} />Активный профиль</> : <>Выбрать <ArrowRight size={15} /></>}</button><button className="profile-play" type="button" aria-label={`Запустить ${instance.name}`} title={`Запустить ${instance.name}`} disabled={!desktop} onClick={() => onPlay(instance.id)}><Play size={15} fill="currentColor" /></button></div></div>
             </article>
           ))}
           <button className="profile-add-card" type="button" onClick={onCreate} disabled={!desktop}><span className="add-card-icon"><Plus size={21} /></span><strong>Новая сборка</strong><small>Любая версия. Любой путь.</small></button>
@@ -850,6 +882,8 @@ function CatalogPage({
   activeInstance,
   versions,
   desktop,
+  initialType,
+  onTypeChange,
   onNotify,
   onRefresh,
   onCreateInstance,
@@ -857,11 +891,13 @@ function CatalogPage({
   activeInstance: GameInstance | null;
   versions: GameVersion[];
   desktop: boolean;
+  initialType: ContentType;
+  onTypeChange: (type: ContentType) => void;
   onNotify: (message: string) => void;
   onRefresh: () => Promise<BootstrapState | null>;
   onCreateInstance: () => void;
 }) {
-  const [type, setType] = useState<ContentType>('mod');
+  const [type, setType] = useState<ContentType>(initialType);
   const [tab, setTab] = useState<'discover' | 'installed'>('discover');
   const [query, setQuery] = useState('');
   const [version, setVersion] = useState(activeInstance?.version ?? versions.find((item) => item.type === 'release')?.id ?? '');
@@ -968,7 +1004,7 @@ function CatalogPage({
       <PageHeading eyebrow="DISCOVER / MODRINTH" title="Каталог контента" description="Находи моды и ресурспаки по версии игры. Установка идёт сразу в выбранный профиль." action={<button className="button button-outline" type="button" onClick={() => void importLocal()} disabled={!desktop || !activeInstance}><Upload size={15} />Импорт файла</button>} />
       <div className="catalog-source"><div className="source-logo">M</div><div><strong>Modrinth</strong><span>Открытый каталог · более 30 000 проектов</span></div><div className="source-secure"><ShieldCheck size={15} />Проверка хеша при загрузке</div><button type="button" aria-label="Открыть Modrinth" onClick={() => openExternal('https://modrinth.com')}><ExternalLink size={15} /></button></div>
       <div className="catalog-controls">
-        <div className="catalog-tabs"><button className={type === 'mod' ? 'catalog-tab active' : 'catalog-tab'} type="button" onClick={() => { setType('mod'); setTab('discover'); }}><Blocks size={15} />Моды</button><button className={type === 'resourcepack' ? 'catalog-tab active' : 'catalog-tab'} type="button" onClick={() => { setType('resourcepack'); setTab('discover'); }}><Paintbrush2 size={15} />Ресурспаки</button></div>
+        <div className="catalog-tabs"><button className={type === 'mod' ? 'catalog-tab active' : 'catalog-tab'} type="button" onClick={() => { setType('mod'); onTypeChange('mod'); setTab('discover'); }}><Blocks size={15} />Моды</button><button className={type === 'resourcepack' ? 'catalog-tab active' : 'catalog-tab'} type="button" onClick={() => { setType('resourcepack'); onTypeChange('resourcepack'); setTab('discover'); }}><Paintbrush2 size={15} />Ресурспаки</button></div>
         <div className="catalog-tab-right"><button className={tab === 'discover' ? 'text-tab selected' : 'text-tab'} type="button" onClick={() => setTab('discover')}>Открыть каталог</button><button className={tab === 'installed' ? 'text-tab selected' : 'text-tab'} type="button" onClick={() => setTab('installed')}>Установлено <span>{installed.length}</span></button></div>
       </div>
       {tab === 'discover' ? (
@@ -1170,11 +1206,11 @@ function SettingsPage({
       <PageHeading eyebrow="CLIENT SETTINGS" title="Параметры лаунчера" description="Управляй входом, Java и памятью, выделяемой выбранному игровому профилю." />
       <div className="settings-layout">
         <section className="settings-card"><div className="settings-card-heading"><div><span className="section-label">АККАУНТЫ</span><h2>Подключённые аккаунты</h2><p>Сессии отделены от каталогов игры; режим хранения зависит от доступной защиты ОС.</p></div><span className="settings-heading-icon account-icon"><UsersRound size={18} /></span></div>{accounts.length ? <div className="account-list">{accounts.map((account) => <div className={`account-list-row ${activeAccount?.id === account.id ? 'account-row-current' : ''}`} key={account.id}><Avatar account={account} /><span className="account-list-name"><strong>{account.name}</strong><small>{providerLabel(account.provider)}</small></span>{activeAccount?.id === account.id ? <span className="current-account-tag"><Check size={12} />Активен</span> : <button className="button button-outline account-switch" type="button" onClick={() => onSwitchAccount(account)}>Выбрать</button>}<button className="icon-button icon-danger" type="button" aria-label={`Удалить аккаунт ${account.name}`} onClick={() => { if (window.confirm(`Удалить ${account.name} с этого устройства?`)) void onRemoveAccount(account.id).catch((error) => onNotify(error instanceof Error ? error.message : 'Не удалось удалить аккаунт.')); }}><Trash2 size={14} /></button></div>)}</div> : <div className="empty-account"><UserRound size={18} /><span>Нет сохранённых игровых аккаунтов.</span></div>}<button className="button button-outline add-account-button" type="button" onClick={onOpenAuth}><Plus size={15} />Добавить аккаунт</button>{desktop && <div className="encrypted-note"><LockKeyhole size={14} />{bootstrap?.secureStorageAvailable ? 'Токены зашифрованы через системный safeStorage.' : 'Системное шифрование недоступно. Вход останется только до закрытия приложения.'}</div>}</section>
-        <section className="settings-card"><div className="settings-card-heading"><div><span className="section-label">GAME RUNTIME</span><h2>Java и память</h2><p>Bloom скачает подходящую Java автоматически, если не выбран свой путь.</p></div><span className="settings-heading-icon runtime-icon"><Cpu size={18} /></span></div><div className="runtime-row"><span className="runtime-status"><Check size={15} /></span><div><strong>Java Runtime</strong><small>{javaPath ? javaPath.split(/[\\/]/).pop() : 'Автоматическая установка подходящей версии'}</small></div><button className="button button-outline small-button" type="button" onClick={onChooseJava} disabled={!desktop}>Выбрать файл</button></div><button className="reset-java" type="button" onClick={() => { onResetJava(); onNotify('Будет использоваться автоматическая Java.'); }}>Вернуть автоустановку</button><div className="memory-setting"><div className="memory-label"><span><strong>Память для Minecraft</strong><small>Система: {bootstrap?.totalMemoryMb ? `${(bootstrap.totalMemoryMb / 1024).toFixed(1)} ГБ` : 'определяется при запуске'}</small></span><strong className="memory-value">{memoryGb} ГБ</strong></div><input type="range" min="2" max={Math.max(2, maxMemoryGb)} step="1" value={Math.min(memoryGb, maxMemoryGb)} onChange={(event) => onMemoryChange(Number(event.target.value))} /><div className="memory-range-labels"><span>2 ГБ</span><span>Оставляем системе минимум 2 ГБ</span><span>{Math.max(2, maxMemoryGb)} ГБ</span></div></div></section>
+        <section className="settings-card"><div className="settings-card-heading"><div><span className="section-label">GAME RUNTIME</span><h2>Java и память</h2><p>Bloom скачает подходящую Java автоматически, если не выбран свой путь.</p></div><span className="settings-heading-icon runtime-icon"><Cpu size={18} /></span></div><div className="runtime-row"><span className="runtime-status"><Check size={15} /></span><div><strong>Java Runtime</strong><small>{javaPath ? javaPath.split(/[\\/]/).pop() : 'Автоматическая установка подходящей версии'}</small></div><button className="button button-outline small-button" type="button" onClick={onChooseJava} disabled={!desktop}>Выбрать файл</button></div><button className="reset-java" type="button" disabled={!desktop || !javaPath} onClick={() => { onResetJava(); onNotify('Будет использоваться автоматическая Java.'); }}>Вернуть автоустановку</button><div className="memory-setting"><div className="memory-label"><span><strong>Память для Minecraft</strong><small>Система: {bootstrap?.totalMemoryMb ? `${(bootstrap.totalMemoryMb / 1024).toFixed(1)} ГБ` : 'определяется при запуске'}</small></span><strong className="memory-value">{memoryGb} ГБ</strong></div><input type="range" min="2" max={Math.max(2, maxMemoryGb)} step="1" value={Math.min(memoryGb, maxMemoryGb)} onChange={(event) => onMemoryChange(Number(event.target.value))} /><div className="memory-range-labels"><span>2 ГБ</span><span>Оставляем системе минимум 2 ГБ</span><span>{Math.max(2, maxMemoryGb)} ГБ</span></div></div></section>
         <section className="settings-card settings-data-card"><div className="settings-card-heading"><div><span className="section-label">LOCAL STORAGE</span><h2>Данные и файлы</h2><p>Игровые каталоги хранятся раздельно от токенов входа.</p></div><span className="settings-heading-icon data-icon"><HardDriveDownload size={18} /></span></div><div className="path-row"><span className="path-type">APP DATA</span><code>{bootstrap?.dataDirectory ?? 'Работает только в установленном приложении'}</code><button className="copy-path" type="button" onClick={() => { if (bootstrap?.dataDirectory) void navigator.clipboard?.writeText(bootstrap.dataDirectory); onNotify('Путь скопирован.'); }} disabled={!desktop}>Копировать</button></div><div className="settings-bullet"><ShieldCheck size={15} /><span>Пароль Ely.by не записывается на диск. Сохраняется только сессионный токен, если ОС предоставляет безопасное хранилище.</span></div><div className="settings-bullet"><Box size={15} /><span>Удаление профиля в Bloom сохраняет игровые файлы и миры. Очистку можно сделать вручную.</span></div></section>
         <section className="settings-card settings-versions-card"><div className="settings-card-heading"><div><span className="section-label">SUPPORTED VERSIONS</span><h2>Полная история Minecraft</h2><p>Релизы, снапшоты, Beta и Alpha из официального version manifest.</p></div><span className="settings-heading-icon versions-icon"><Clock3 size={18} /></span></div><div className="version-count-line"><strong>{versions.length ? versions.length.toLocaleString('ru-RU') : '—'}</strong><span>официальных версий доступно</span></div><div className="version-channel-tags"><span>Release</span><span>Snapshot</span><span>Old Beta</span><span>Old Alpha</span></div><div className="catalog-mini-link"><span>Фильтры Modrinth используют версию профиля и загрузчик.</span><BadgeCheck size={15} /></div></section>
       </div>
-      <div className="settings-footer"><span>Bloom Client · desktop {bootstrap?.appVersion ?? '0.5.0'}</span><button type="button" onClick={() => openExternal('https://github.com/zxcwmd/zxc')}>О проекте <ArrowUpRight size={13} /></button></div>
+      <div className="settings-footer"><span>Bloom Client · desktop {bootstrap?.appVersion ?? '0.5.1'}</span><button type="button" onClick={() => openExternal('https://github.com/zxcwmd/zxc')}>О проекте <ArrowUpRight size={13} /></button></div>
     </div>
   );
 }

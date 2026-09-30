@@ -1,6 +1,6 @@
 {
   "name": "bloom-client",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "description": "Bloom Client — Minecraft launcher",
   "author": "Bloom Client",
   "private": true,
