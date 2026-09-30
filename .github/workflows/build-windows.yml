@@ -56,11 +56,11 @@ jobs:
           retention-days: 14
 
       - name: Publish public GitHub pre-release
-        if: github.event_name == 'workflow_dispatch' && inputs.publish_release
+        if: (github.event_name == 'workflow_dispatch' && inputs.publish_release) || (github.event_name == 'push' && contains(github.event.head_commit.message, '[publish-release]'))
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
-          RELEASE_TAG: ${{ inputs.release_tag }}
+          RELEASE_TAG: ${{ inputs.release_tag || 'v0.5.0-preview.1' }}
         run: |
           if ($env:RELEASE_TAG -notmatch '^v[0-9A-Za-z][0-9A-Za-z.-]*$') {
             throw 'Release tag must start with v and contain only letters, numbers, dots, and hyphens.'
