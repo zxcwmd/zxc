@@ -12,7 +12,7 @@ on:
         description: Release tag to create when publishing
         type: string
         required: true
-        default: v0.5.5-preview.1
+        default: v0.5.6-preview.1
   push:
     branches:
       - arena/01a0f20e-zxc
@@ -60,14 +60,14 @@ jobs:
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
-          RELEASE_TAG: ${{ inputs.release_tag || 'v0.5.5-preview.1' }}
+          RELEASE_TAG: ${{ inputs.release_tag || 'v0.5.6-preview.1' }}
         run: |
           if ($env:RELEASE_TAG -notmatch '^v[0-9A-Za-z][0-9A-Za-z.-]*$') {
             throw 'Release tag must start with v and contain only letters, numbers, dots, and hyphens.'
           }
           $installer = Get-ChildItem -Path release -Filter '*.exe' | Select-Object -First 1
           if (-not $installer) { throw 'Windows installer was not produced.' }
-          gh release create $env:RELEASE_TAG $installer.FullName --target $env:GITHUB_SHA --title "Bloom Client 0.5.5 Preview 1" --notes "A freshly redrawn, warmer Cherry Grove sunset clearing with a brighter campfire-side ground. The seated 3D player is now lower, closer to the fire, and framed from a more natural elevated three-quarter view; both supporting arms are kept close to the body. Drag rotation without zoom, a 3-second pause before smooth return, idle glances, and breathing remain. Windows x64 installer built from commit $env:GITHUB_SHA." --prerelease
+          gh release create $env:RELEASE_TAG $installer.FullName --target $env:GITHUB_SHA --title "Bloom Client 0.5.6 Preview 1" --notes "Refined the main-menu player framing after visual feedback: a flatter, gentler three-quarter camera, reduced perspective distortion and avatar scale, more upright seated posture, symmetric supporting arms, and visibly separated forward legs. The avatar remains grounded beside the fire; the sunset clearing, drag rotation without zoom, smooth 3-second return, breathing and idle glances remain. Windows x64 installer built from commit $env:GITHUB_SHA." --prerelease
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Upload build log on failure

@@ -211,7 +211,7 @@ function SkinPreview({ skin, cape, name, className = '', pose = 'standing' }: { 
     let lookYaw = 0;
     let lookPitch = 0;
     const seated = pose === 'seated';
-    const baseYaw = -0.58;
+    const baseYaw = -0.28;
     const returnDuration = 1050;
     const easeInOut = (value: number) => {
       const t = Math.max(0, Math.min(1, value));
@@ -286,7 +286,7 @@ function SkinPreview({ skin, cape, name, className = '', pose = 'standing' }: { 
         ? new FunctionAnimation((player, progress) => {
             const now = performance.now();
             const breath = Math.sin(progress * 1.65) * 0.5 + 0.5;
-            const lean = -0.47;
+            const lean = -0.38;
             const leanCos = Math.cos(lean);
             const leanSin = Math.sin(lean);
             const joints = player.skin;
@@ -314,15 +314,15 @@ function SkinPreview({ skin, cape, name, className = '', pose = 'standing' }: { 
 
             joints.rightArm.position.set(-5, -6 + 4 * leanCos, 4 * leanSin);
             joints.leftArm.position.set(5, -6 + 4 * leanCos, 4 * leanSin);
-            joints.rightArm.rotation.set(0.87 + breath * 0.025, -0.025, -0.14);
-            joints.leftArm.rotation.set(0.87 + breath * 0.025, 0.025, 0.14);
+            joints.rightArm.rotation.set(0.66 + breath * 0.018, -0.03, -0.08);
+            joints.leftArm.rotation.set(0.66 + breath * 0.018, 0.03, 0.08);
 
             const hipY = -6 - 6 * leanCos;
             const hipZ = -6 * leanSin;
-            joints.rightLeg.position.set(-1.9, hipY, hipZ);
-            joints.leftLeg.position.set(1.9, hipY, hipZ);
-            joints.rightLeg.rotation.set(-Math.PI / 2 + breathing * 0.006, 0, -0.045);
-            joints.leftLeg.rotation.set(-Math.PI / 2 - breathing * 0.006, 0, 0.045);
+            joints.rightLeg.position.set(-2.1, hipY, hipZ);
+            joints.leftLeg.position.set(2.1, hipY, hipZ);
+            joints.rightLeg.rotation.set(-Math.PI / 2 + breathing * 0.006, 0, -0.12);
+            joints.leftLeg.rotation.set(-Math.PI / 2 - breathing * 0.006, 0, 0.12);
 
             player.position.y = -2 + breath * 0.12;
             player.rotation.y = yaw;
@@ -337,7 +337,7 @@ function SkinPreview({ skin, cape, name, className = '', pose = 'standing' }: { 
         cape: cape ?? undefined,
         enableControls: !seated,
         fov: seated ? 38 : 36,
-        zoom: seated ? 0.76 : 0.76,
+        zoom: seated ? 0.62 : 0.76,
         pixelRatio: 1,
         nameTag: seated ? undefined : name ?? undefined,
         animation: seatedAnimation,
@@ -349,7 +349,7 @@ function SkinPreview({ skin, cape, name, className = '', pose = 'standing' }: { 
       if (seated) {
         viewer.playerWrapper.rotation.y = baseYaw;
         viewer.controls.target.set(0, 1.5, 0);
-        viewer.camera.position.set(12, 15.5, 65);
+        viewer.camera.position.set(8, 14, 80);
         viewer.camera.lookAt(viewer.controls.target);
         viewer.controls.update();
         frame.classList.add('skin-interactive');
@@ -851,7 +851,7 @@ function App() {
           </div>
         </header>
 
-        {!desktop && <div className="preview-banner"><MonitorPlay size={15} /><span>Это интерактивный preview. Авторизация, запись файлов и запуск доступны в установленном приложении.</span><button type="button" onClick={() => void openExternal('https://github.com/zxcwmd/zxc/releases/tag/v0.5.5-preview.1')}>Скачать приложение</button></div>}
+        {!desktop && <div className="preview-banner"><MonitorPlay size={15} /><span>Это интерактивный preview. Авторизация, запись файлов и запуск доступны в установленном приложении.</span><button type="button" onClick={() => void openExternal('https://github.com/zxcwmd/zxc/releases/tag/v0.5.6-preview.1')}>Скачать приложение</button></div>}
         <div className="content-scroll">
           {loadingApp && <div className="loading-line"><span />Подготавливаем библиотеку Bloom…</div>}
           {versionsError && <div className="inline-warning"><CircleHelp size={16} /><span>Список версий Minecraft временно недоступен. Проверьте подключение к интернету и повторите попытку.</span><button type="button" onClick={() => void loadVersions()}>Повторить</button></div>}
@@ -1557,7 +1557,7 @@ function SettingsPage({
         <section className="settings-card settings-data-card"><div className="settings-card-heading"><div><span className="section-label">LOCAL STORAGE</span><h2>Данные и файлы</h2><p>Игровые каталоги хранятся раздельно от токенов входа.</p></div><span className="settings-heading-icon data-icon"><HardDriveDownload size={18} /></span></div><div className="path-row"><span className="path-type">APP DATA</span><code>{bootstrap?.dataDirectory ?? 'Работает только в установленном приложении'}</code><button className="copy-path" type="button" onClick={() => { if (bootstrap?.dataDirectory) void navigator.clipboard?.writeText(bootstrap.dataDirectory); onNotify('Путь скопирован.'); }} disabled={!desktop}>Копировать</button></div><div className="settings-bullet"><ShieldCheck size={15} /><span>Пароль Ely.by не записывается на диск. Сохраняется только сессионный токен, если ОС предоставляет безопасное хранилище.</span></div><div className="settings-bullet"><Box size={15} /><span>Удаление профиля в Bloom сохраняет игровые файлы и миры. Очистку можно сделать вручную.</span></div></section>
         <section className="settings-card settings-versions-card"><div className="settings-card-heading"><div><span className="section-label">SUPPORTED VERSIONS</span><h2>Полная история Minecraft</h2><p>Релизы, снапшоты, Beta и Alpha из официального version manifest.</p></div><span className="settings-heading-icon versions-icon"><Clock3 size={18} /></span></div><div className="version-count-line"><strong>{versions.length ? versions.length.toLocaleString('ru-RU') : '—'}</strong><span>официальных версий доступно</span></div><div className="version-channel-tags"><span>Release</span><span>Snapshot</span><span>Old Beta</span><span>Old Alpha</span></div><div className="catalog-mini-link"><span>Фильтры Modrinth используют версию профиля и загрузчик.</span><BadgeCheck size={15} /></div></section>
       </div>
-      <div className="settings-footer"><span>Bloom Client · desktop {bootstrap?.appVersion ?? '0.5.5'}</span><button type="button" onClick={() => openExternal('https://github.com/zxcwmd/zxc')}>О проекте <ArrowUpRight size={13} /></button></div>
+      <div className="settings-footer"><span>Bloom Client · desktop {bootstrap?.appVersion ?? '0.5.6'}</span><button type="button" onClick={() => openExternal('https://github.com/zxcwmd/zxc')}>О проекте <ArrowUpRight size={13} /></button></div>
     </div>
   );
 }

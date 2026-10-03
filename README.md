@@ -28,7 +28,7 @@ npm ci
 npm run dist:win
 ```
 
-`.exe` появится в `release/`. GitHub Actions workflow **Bloom Client Windows build** собирает Windows x64 NSIS installer. [Скачать актуальный установщик Bloom Client 0.5.5 Preview 1](https://github.com/zxcwmd/zxc/releases/download/v0.5.5-preview.1/Bloom-Client-Setup-0.5.5-x64.exe).
+`.exe` появится в `release/`. GitHub Actions workflow **Bloom Client Windows build** собирает Windows x64 NSIS installer. [Скачать актуальный установщик Bloom Client 0.5.6 Preview 1](https://github.com/zxcwmd/zxc/releases/download/v0.5.6-preview.1/Bloom-Client-Setup-0.5.6-x64.exe).
 
 ## Функции desktop-версии
 
