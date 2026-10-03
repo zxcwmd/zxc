@@ -193,7 +193,86 @@ function SkinPreview({ skin, cape, name, className = '', pose = 'standing' }: { 
     let cancelled = false;
     let observer: ResizeObserver | null = null;
     let viewer: SkinViewer | null = null;
+    let dragging = false;
+    let activePointerId: number | null = null;
+    let lastPointerX = 0;
+    let manualYaw = 0;
+    let returnAt = 0;
+    let returnStartedAt = 0;
+    let returnFromYaw = 0;
+    let lastUserAction = performance.now();
+    let lookStartAt = performance.now();
+    let nextLookAt = lookStartAt + 1800 + Math.random() * 1800;
+    let lookDuration = 650;
+    let lookYawFrom = 0;
+    let lookYawTo = 0;
+    let lookPitchFrom = 0;
+    let lookPitchTo = 0;
+    let lookYaw = 0;
+    let lookPitch = 0;
     const seated = pose === 'seated';
+    const baseYaw = -0.34;
+    const returnDuration = 1050;
+    const easeInOut = (value: number) => {
+      const t = Math.max(0, Math.min(1, value));
+      return t * t * (3 - 2 * t);
+    };
+    const currentManualYaw = (now: number) => {
+      if (!dragging && !returnStartedAt && returnAt && now >= returnAt) {
+        returnStartedAt = now;
+        returnFromYaw = manualYaw;
+        returnAt = 0;
+      }
+      if (returnStartedAt) {
+        const progress = Math.min(1, (now - returnStartedAt) / returnDuration);
+        if (progress >= 1) {
+          manualYaw = 0;
+          returnStartedAt = 0;
+          returnAt = 0;
+          return 0;
+        }
+        return returnFromYaw * (1 - easeInOut(progress));
+      }
+      return manualYaw;
+    };
+
+    const handlePointerDown = (event: PointerEvent) => {
+      if (!seated || !event.isPrimary || (event.pointerType === 'mouse' && event.button !== 0)) return;
+      const now = performance.now();
+      manualYaw = currentManualYaw(now);
+      returnAt = 0;
+      returnStartedAt = 0;
+      dragging = true;
+      activePointerId = event.pointerId;
+      lastPointerX = event.clientX;
+      lastUserAction = now;
+      nextLookAt = now + 4500;
+      canvas.classList.add('skin-dragging');
+      try { canvas.setPointerCapture(event.pointerId); } catch { /* pointer capture may be unavailable in embedded previews */ }
+      event.preventDefault();
+    };
+    const handlePointerMove = (event: PointerEvent) => {
+      if (!dragging || event.pointerId !== activePointerId) return;
+      const now = performance.now();
+      const currentYaw = currentManualYaw(now);
+      manualYaw = currentYaw + (event.clientX - lastPointerX) * 0.0105;
+      lastPointerX = event.clientX;
+      returnAt = 0;
+      returnStartedAt = 0;
+      lastUserAction = now;
+      event.preventDefault();
+    };
+    const finishPointer = (event: PointerEvent) => {
+      if (!dragging || event.pointerId !== activePointerId) return;
+      dragging = false;
+      activePointerId = null;
+      lastUserAction = performance.now();
+      returnAt = lastUserAction + 3000;
+      nextLookAt = lastUserAction + 4600 + Math.random() * 1800;
+      canvas.classList.remove('skin-dragging');
+      event.preventDefault();
+    };
+    const handleContextMenu = (event: MouseEvent) => { if (seated) event.preventDefault(); };
 
     void import('skinview3d').then(({ SkinViewer, FunctionAnimation }) => {
       if (cancelled) return;
@@ -205,15 +284,48 @@ function SkinPreview({ skin, cape, name, className = '', pose = 'standing' }: { 
       const bounds = frame.getBoundingClientRect();
       const seatedAnimation = seated
         ? new FunctionAnimation((player, progress) => {
-            const breath = Math.sin(progress * Math.PI * 0.8) * 0.018;
+            const now = performance.now();
+            const breath = Math.sin(progress * 1.65) * 0.5 + 0.5;
+            const lean = -0.47;
+            const leanCos = Math.cos(lean);
+            const leanSin = Math.sin(lean);
             const joints = player.skin;
-            joints.body.rotation.set(-0.035 + breath, 0, 0);
-            joints.head.rotation.set(breath * 0.5, -0.1, 0);
-            joints.leftLeg.rotation.set(-Math.PI / 2 + breath * 0.12, 0, -0.035);
-            joints.rightLeg.rotation.set(-Math.PI / 2 - breath * 0.12, 0, 0.035);
-            joints.leftArm.rotation.set(-0.94 + breath, 0, 0.15);
-            joints.rightArm.rotation.set(-0.94 + breath, 0, -0.15);
-            player.rotation.y = -0.24;
+            const yaw = currentManualYaw(now);
+
+            if (!dragging && !returnAt && !returnStartedAt && now - lastUserAction > 2500 && now >= nextLookAt) {
+              lookYawFrom = lookYaw;
+              lookPitchFrom = lookPitch;
+              lookYawTo = (Math.random() - 0.5) * 0.56;
+              lookPitchTo = (Math.random() - 0.5) * 0.18;
+              lookStartAt = now;
+              lookDuration = 550 + Math.random() * 450;
+              nextLookAt = now + 2900 + Math.random() * 3100;
+            }
+            const lookProgress = easeInOut((now - lookStartAt) / lookDuration);
+            lookYaw = lookYawFrom + (lookYawTo - lookYawFrom) * lookProgress;
+            lookPitch = lookPitchFrom + (lookPitchTo - lookPitchFrom) * lookProgress;
+            const gazeBlend = dragging || returnAt || returnStartedAt ? 0 : 1;
+            const breathing = Math.sin(progress * 1.65);
+
+            joints.body.rotation.set(lean + breathing * 0.018, 0, Math.sin(progress * 0.55) * 0.009);
+            joints.body.position.y = -6 + breath * 0.18;
+            joints.head.position.set(0, -6 + 6 * leanCos + breath * 0.14, 6 * leanSin);
+            joints.head.rotation.set(0.06 + lookPitch * gazeBlend + breathing * 0.018, lookYaw * gazeBlend, 0);
+
+            joints.rightArm.position.set(-5, -6 + 4 * leanCos, 4 * leanSin);
+            joints.leftArm.position.set(5, -6 + 4 * leanCos, 4 * leanSin);
+            joints.rightArm.rotation.set(0.87 + breath * 0.025, -0.025, -0.48);
+            joints.leftArm.rotation.set(0.87 + breath * 0.025, 0.025, 0.48);
+
+            const hipY = -6 - 6 * leanCos;
+            const hipZ = -6 * leanSin;
+            joints.rightLeg.position.set(-1.9, hipY, hipZ);
+            joints.leftLeg.position.set(1.9, hipY, hipZ);
+            joints.rightLeg.rotation.set(-Math.PI / 2 + breathing * 0.006, 0, -0.045);
+            joints.leftLeg.rotation.set(-Math.PI / 2 - breathing * 0.006, 0, 0.045);
+
+            player.position.y = 5 + breath * 0.12;
+            player.rotation.y = yaw;
           })
         : undefined;
 
@@ -223,16 +335,27 @@ function SkinPreview({ skin, cape, name, className = '', pose = 'standing' }: { 
         height: Math.max(200, Math.floor(bounds.height)),
         skin: skin ?? demo ?? undefined,
         cape: cape ?? undefined,
-        enableControls: true,
-        fov: seated ? 34 : 36,
-        zoom: seated ? 1.02 : 0.76,
+        enableControls: !seated,
+        fov: seated ? 38 : 36,
+        zoom: seated ? 0.76 : 0.76,
         pixelRatio: 1,
         nameTag: seated ? undefined : name ?? undefined,
         animation: seatedAnimation,
       });
+      viewer.controls.enableZoom = false;
+      viewer.controls.enablePan = false;
       viewer.autoRotate = !seated;
       viewer.autoRotateSpeed = 0.62;
-      if (seated) viewer.playerWrapper.position.y = -5;
+      if (seated) {
+        viewer.playerWrapper.rotation.y = baseYaw;
+        frame.classList.add('skin-interactive');
+        canvas.addEventListener('pointerdown', handlePointerDown);
+        canvas.addEventListener('pointermove', handlePointerMove);
+        canvas.addEventListener('pointerup', finishPointer);
+        canvas.addEventListener('pointercancel', finishPointer);
+        canvas.addEventListener('lostpointercapture', finishPointer as EventListener);
+        canvas.addEventListener('contextmenu', handleContextMenu);
+      }
       observer = new ResizeObserver(() => {
         const next = frame.getBoundingClientRect();
         viewer?.setSize(Math.max(160, Math.floor(next.width)), Math.max(200, Math.floor(next.height)));
@@ -242,6 +365,16 @@ function SkinPreview({ skin, cape, name, className = '', pose = 'standing' }: { 
     return () => {
       cancelled = true;
       observer?.disconnect();
+      if (seated) {
+        canvas.removeEventListener('pointerdown', handlePointerDown);
+        canvas.removeEventListener('pointermove', handlePointerMove);
+        canvas.removeEventListener('pointerup', finishPointer);
+        canvas.removeEventListener('pointercancel', finishPointer);
+        canvas.removeEventListener('lostpointercapture', finishPointer as EventListener);
+        canvas.removeEventListener('contextmenu', handleContextMenu);
+        frame.classList.remove('skin-interactive');
+        canvas.classList.remove('skin-dragging');
+      }
       viewer?.dispose();
     };
   }, [skin, cape, name, pose]);
@@ -714,7 +847,7 @@ function App() {
           </div>
         </header>
 
-        {!desktop && <div className="preview-banner"><MonitorPlay size={15} /><span>Это интерактивный preview. Авторизация, запись файлов и запуск доступны в установленном приложении.</span><button type="button" onClick={() => void openExternal('https://github.com/zxcwmd/zxc/releases/tag/v0.5.3-preview.1')}>Скачать приложение</button></div>}
+        {!desktop && <div className="preview-banner"><MonitorPlay size={15} /><span>Это интерактивный preview. Авторизация, запись файлов и запуск доступны в установленном приложении.</span><button type="button" onClick={() => void openExternal('https://github.com/zxcwmd/zxc/releases/tag/v0.5.4-preview.1')}>Скачать приложение</button></div>}
         <div className="content-scroll">
           {loadingApp && <div className="loading-line"><span />Подготавливаем библиотеку Bloom…</div>}
           {versionsError && <div className="inline-warning"><CircleHelp size={16} /><span>Список версий Minecraft временно недоступен. Проверьте подключение к интернету и повторите попытку.</span><button type="button" onClick={() => void loadVersions()}>Повторить</button></div>}
@@ -797,7 +930,7 @@ function HomePage({
         <div className="home-scene-title"><span className="scene-overline"><Sparkles size={13} /> ТВОЁ МЕСТО В МИРЕ MINECRAFT</span><h1>Bloom <em>Client</em></h1><p>Собери своё приключение.</p></div>
 
         <div className="home-scene-world-chip"><span className="pulse-point" />ВИШНЁВАЯ ОПУШКА <i /> v{latestRelease}</div>
-        <div className="home-scene-player"><div className="scene-player-glow" /><SkinPreview skin={skin} cape={cape} name={account?.name ?? 'Bloom Explorer'} className="home-scene-skin" pose="seated" /><div className="scene-player-caption"><span>{account ? 'ИГРОК У КОСТРА' : 'DEMO PLAYER'}</span><strong>{account?.name ?? 'Bloom Explorer'}</strong></div></div>
+        <div className="home-scene-player"><div className="scene-player-glow" /><SkinPreview skin={skin} cape={cape} name={account?.name ?? 'Bloom Explorer'} className="home-scene-skin" pose="seated" /><div className="scene-player-caption"><span>{account ? 'ИГРОК У КОСТРА' : 'DEMO PLAYER'}</span><strong>{account?.name ?? 'Bloom Explorer'}</strong><small>Потяни, чтобы осмотреть</small></div></div>
         <div className="home-scene-caption"><span>ТИШИНА. ТЁПЛЫЙ СВЕТ. И ЦЕЛЫЙ МИР ВПЕРЕДИ.</span><span>JAVA EDITION · {desktop ? 'DESKTOP CLIENT' : 'WEB PREVIEW'}</span></div>
 
         <nav className="home-round-nav" aria-label="Разделы Bloom Client">
@@ -1420,7 +1553,7 @@ function SettingsPage({
         <section className="settings-card settings-data-card"><div className="settings-card-heading"><div><span className="section-label">LOCAL STORAGE</span><h2>Данные и файлы</h2><p>Игровые каталоги хранятся раздельно от токенов входа.</p></div><span className="settings-heading-icon data-icon"><HardDriveDownload size={18} /></span></div><div className="path-row"><span className="path-type">APP DATA</span><code>{bootstrap?.dataDirectory ?? 'Работает только в установленном приложении'}</code><button className="copy-path" type="button" onClick={() => { if (bootstrap?.dataDirectory) void navigator.clipboard?.writeText(bootstrap.dataDirectory); onNotify('Путь скопирован.'); }} disabled={!desktop}>Копировать</button></div><div className="settings-bullet"><ShieldCheck size={15} /><span>Пароль Ely.by не записывается на диск. Сохраняется только сессионный токен, если ОС предоставляет безопасное хранилище.</span></div><div className="settings-bullet"><Box size={15} /><span>Удаление профиля в Bloom сохраняет игровые файлы и миры. Очистку можно сделать вручную.</span></div></section>
         <section className="settings-card settings-versions-card"><div className="settings-card-heading"><div><span className="section-label">SUPPORTED VERSIONS</span><h2>Полная история Minecraft</h2><p>Релизы, снапшоты, Beta и Alpha из официального version manifest.</p></div><span className="settings-heading-icon versions-icon"><Clock3 size={18} /></span></div><div className="version-count-line"><strong>{versions.length ? versions.length.toLocaleString('ru-RU') : '—'}</strong><span>официальных версий доступно</span></div><div className="version-channel-tags"><span>Release</span><span>Snapshot</span><span>Old Beta</span><span>Old Alpha</span></div><div className="catalog-mini-link"><span>Фильтры Modrinth используют версию профиля и загрузчик.</span><BadgeCheck size={15} /></div></section>
       </div>
-      <div className="settings-footer"><span>Bloom Client · desktop {bootstrap?.appVersion ?? '0.5.3'}</span><button type="button" onClick={() => openExternal('https://github.com/zxcwmd/zxc')}>О проекте <ArrowUpRight size={13} /></button></div>
+      <div className="settings-footer"><span>Bloom Client · desktop {bootstrap?.appVersion ?? '0.5.4'}</span><button type="button" onClick={() => openExternal('https://github.com/zxcwmd/zxc')}>О проекте <ArrowUpRight size={13} /></button></div>
     </div>
   );
 }

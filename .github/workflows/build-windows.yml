@@ -12,7 +12,7 @@ on:
         description: Release tag to create when publishing
         type: string
         required: true
-        default: v0.5.3-preview.1
+        default: v0.5.4-preview.1
   push:
     branches:
       - arena/01a0f20e-zxc
@@ -60,14 +60,14 @@ jobs:
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
-          RELEASE_TAG: ${{ inputs.release_tag || 'v0.5.3-preview.1' }}
+          RELEASE_TAG: ${{ inputs.release_tag || 'v0.5.4-preview.1' }}
         run: |
           if ($env:RELEASE_TAG -notmatch '^v[0-9A-Za-z][0-9A-Za-z.-]*$') {
             throw 'Release tag must start with v and contain only letters, numbers, dots, and hyphens.'
           }
           $installer = Get-ChildItem -Path release -Filter '*.exe' | Select-Object -First 1
           if (-not $installer) { throw 'Windows installer was not produced.' }
-          gh release create $env:RELEASE_TAG $installer.FullName --target $env:GITHUB_SHA --title "Bloom Client 0.5.3 Preview 1" --notes "Cherry Grove main menu with four round navigation buttons, a seated 3D player preview, and a dedicated Play setup flow. The Builds hub includes Bloom profiles and Modrinth modpacks with verified .mrpack installation. Windows x64 installer built from commit $env:GITHUB_SHA." --prerelease
+          gh release create $env:RELEASE_TAG $installer.FullName --target $env:GITHUB_SHA --title "Bloom Client 0.5.4 Preview 1" --notes "A new Cherry Grove sunset clearing, improved seated player pose inspired by the supplied reference, pointer rotation without zoom, smooth return to the default angle after 3 seconds, idle glances, and breathing animation. Windows x64 installer built from commit $env:GITHUB_SHA." --prerelease
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Upload build log on failure
