@@ -19,6 +19,7 @@ const api = {
   },
   searchModrinth: (input) => ipcRenderer.invoke('modrinth:search', input),
   installModrinth: (input) => ipcRenderer.invoke('modrinth:install', input),
+  installModrinthPack: (input) => ipcRenderer.invoke('modrinth:install-pack', input),
   getInstalledContent: (input) => ipcRenderer.invoke('content:list', input),
   importLocalContent: (input) => ipcRenderer.invoke('content:import', input),
   removeInstalledContent: (input) => ipcRenderer.invoke('content:remove', input),

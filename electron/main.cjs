@@ -4,6 +4,7 @@ const fs = require('node:fs');
 const fsp = require('node:fs/promises');
 const crypto = require('node:crypto');
 const { app, BrowserWindow, dialog, ipcMain, safeStorage, shell } = require('electron');
+const unzipper = require('unzipper');
 
 const DEV_SERVER_URL = 'http://localhost:5173';
 const MINECRAFT_MANIFEST_URL = 'https://piston-meta.mojang.com/mc/game/version_manifest_v2.json';
@@ -13,6 +14,11 @@ const ELY_AUTH_API_URL = `${ELY_AUTH_URL}/auth`;
 const GAME_ROOT_ID = 'bloom-client';
 const ALLOWED_LOADERS = new Set(['vanilla', 'fabric', 'quilt', 'forge', 'neoforge']);
 const MAX_CONTENT_SIZE = 250 * 1024 * 1024;
+const MAX_MODPACK_ARCHIVE_SIZE = 500 * 1024 * 1024;
+const MAX_MODPACK_FILE_SIZE = 350 * 1024 * 1024;
+const MAX_MODPACK_TOTAL_SIZE = 2 * 1024 * 1024 * 1024;
+const MAX_MODPACK_ENTRIES = 12_000;
+const MAX_MODPACK_ENTRY_SIZE = 250 * 1024 * 1024;
 
 let mainWindow;
 let activeLaunch = null;
@@ -59,6 +65,12 @@ function validateLoader(loader) {
   const safeLoader = String(loader ?? '');
   if (!ALLOWED_LOADERS.has(safeLoader)) throw new Error('Выбран неизвестный загрузчик Minecraft.');
   return safeLoader;
+}
+
+function validateLoaderVersion(value) {
+  const safeVersion = sanitizeText(value, 80);
+  if (!/^[0-9][0-9a-zA-Z.+_-]*$/.test(safeVersion)) throw new Error('Версия загрузчика в сборке недействительна.');
+  return safeVersion;
 }
 
 function getInstances() {
@@ -272,7 +284,7 @@ function instanceSummary(instance) {
   try { contentCount = fs.readdirSync(modsDirectory).filter((name) => name.toLowerCase().endsWith('.jar')).length; } catch { /* not installed yet */ }
   let installed = false;
   try { installed = fs.readdirSync(versionsDirectory).length > 0; } catch { /* not installed yet */ }
-  return { ...instance, installed, contentCount };
+  return { ...instance, source: instance.source === 'modrinth' ? 'modrinth' : 'profile', installed, contentCount };
 }
 
 async function fetchModrinthProjectVersions(projectId, gameVersion, loader, type) {
@@ -321,6 +333,189 @@ async function installVersionFile(version, type, instanceId, installedNames) {
   if (!hashes.sha512 && hashes.sha1 && crypto.createHash('sha1').update(buffer).digest('hex').toLowerCase() !== String(hashes.sha1).toLowerCase()) throw new Error(`Проверка SHA-1 не пройдена для ${fileName}.`);
   await fsp.writeFile(destination, buffer);
   installedNames.push({ destination, name: fileName });
+}
+
+function isAllowedModpackHost(hostname) {
+  const host = String(hostname ?? '').toLowerCase();
+  return host === 'github.com'
+    || host === 'modrinth.com'
+    || host === 'raw.githubusercontent.com'
+    || host === 'objects.githubusercontent.com'
+    || host === 'edge.forgecdn.net'
+    || host === 'media.forgecdn.net'
+    || host.endsWith('.githubusercontent.com')
+    || host.endsWith('.forgecdn.net')
+    || host.endsWith('.modrinth.com');
+}
+
+function validateModpackUrl(rawUrl) {
+  let url;
+  try { url = new URL(String(rawUrl)); } catch { throw new Error('Ссылка на файл сборки некорректна.'); }
+  if (url.protocol !== 'https:' || url.username || url.password || (url.port && url.port !== '443') || !isAllowedModpackHost(url.hostname)) {
+    throw new Error('Источник файла сборки не входит в список доверенных доменов.');
+  }
+  return url;
+}
+
+async function fetchModrinthPackVersion(projectId, gameVersion, loader) {
+  const params = new URLSearchParams();
+  params.set('game_versions', JSON.stringify([gameVersion]));
+  if (loader !== 'vanilla') params.set('loaders', JSON.stringify([loader]));
+  const response = await fetch(`${MODRINTH_API}/project/${encodeURIComponent(projectId)}/version?${params}`, {
+    headers: { 'User-Agent': 'BloomClient/0.5 (+https://github.com/zxcwmd/zxc)' },
+  });
+  if (!response.ok) throw new Error(`Modrinth не вернул версии сборки (HTTP ${response.status}).`);
+  const versions = await response.json();
+  const selected = versions.find((version) => {
+    const compatibleLoader = loader === 'vanilla'
+      ? !version.loaders?.length || version.loaders.includes('vanilla')
+      : version.loaders?.includes(loader);
+    return version.status !== 'archived'
+      && version.game_versions?.includes(gameVersion)
+      && compatibleLoader
+      && version.files?.some((file) => file.filename?.toLowerCase().endsWith('.mrpack'));
+  });
+  if (!selected) throw new Error(`Не найдена Modrinth-сборка для Minecraft ${gameVersion} / ${loader}.`);
+  return selected;
+}
+
+function selectModpackFile(version) {
+  const file = (version.files ?? []).find((item) => item.primary && item.filename?.toLowerCase().endsWith('.mrpack'))
+    ?? (version.files ?? []).find((item) => item.filename?.toLowerCase().endsWith('.mrpack'));
+  if (!file?.url) throw new Error('У выбранной Modrinth-сборки нет .mrpack-файла.');
+  return file;
+}
+
+async function readLimitedResponseBuffer(response, maximumSize) {
+  if (!response.body) throw new Error('Сервер не передал файл сборки.');
+  const reader = response.body.getReader();
+  const chunks = [];
+  let total = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      total += value.byteLength;
+      if (total > maximumSize) throw new Error('Файл сборки превышает допустимый размер.');
+      chunks.push(Buffer.from(value));
+    }
+  } catch (error) {
+    await reader.cancel().catch(() => {});
+    throw error;
+  } finally {
+    reader.releaseLock();
+  }
+  return Buffer.concat(chunks, total);
+}
+
+async function fetchVerifiedModpackFile(rawUrl, expectedSize, hashes, maximumSize) {
+  const url = validateModpackUrl(rawUrl);
+  const response = await fetch(url, { headers: { 'User-Agent': 'BloomClient/0.5 (+https://github.com/zxcwmd/zxc)' } });
+  if (!response.ok) throw new Error(`Не удалось загрузить файл сборки (HTTP ${response.status}).`);
+  const finalUrl = validateModpackUrl(response.url || url.href);
+  if (!isAllowedModpackHost(finalUrl.hostname)) throw new Error('Загрузка сборки перенаправлена на неподдерживаемый домен.');
+  const contentLength = Number(response.headers.get('content-length'));
+  if (contentLength > maximumSize) throw new Error('Файл сборки превышает допустимый размер.');
+  const buffer = await readLimitedResponseBuffer(response, maximumSize);
+  if (!buffer.length) throw new Error('Файл сборки пуст.');
+  if (expectedSize !== undefined && expectedSize !== null && Number.isFinite(Number(expectedSize)) && buffer.length !== Number(expectedSize)) throw new Error('Размер файла сборки не совпал с манифестом.');
+  const sha512 = String(hashes?.sha512 ?? '').toLowerCase();
+  const sha1 = String(hashes?.sha1 ?? '').toLowerCase();
+  if (sha512 && crypto.createHash('sha512').update(buffer).digest('hex').toLowerCase() !== sha512) throw new Error('Проверка SHA-512 файла сборки не пройдена.');
+  if (!sha512 && sha1 && crypto.createHash('sha1').update(buffer).digest('hex').toLowerCase() !== sha1) throw new Error('Проверка SHA-1 файла сборки не пройдена.');
+  if (!sha512 && !sha1) throw new Error('В манифесте сборки отсутствует хеш для проверки файла.');
+  return buffer;
+}
+
+function safeModpackPath(root, relativePath) {
+  const raw = String(relativePath ?? '');
+  if (!raw || raw.includes(String.fromCharCode(92)) || raw.includes(String.fromCharCode(0)) || raw.startsWith('/') || /^[a-zA-Z]:/.test(raw)) throw new Error('Сборка содержит недопустимый путь к файлу.');
+  const segments = raw.split('/');
+  if (segments.some((segment) => !segment || segment === '.' || segment === '..' || segment.includes(':'))) throw new Error('Сборка содержит недопустимый путь к файлу.');
+  const absoluteRoot = path.resolve(root);
+  const destination = path.resolve(absoluteRoot, ...segments);
+  if (!destination.startsWith(`${absoluteRoot}${path.sep}`)) throw new Error('Файл сборки выходит за пределы игрового профиля.');
+  return destination;
+}
+
+async function writeModpackFile(root, relativePath, buffer, overwrite = false) {
+  const destination = safeModpackPath(root, relativePath);
+  await fsp.mkdir(path.dirname(destination), { recursive: true });
+  await fsp.writeFile(destination, buffer, { flag: overwrite ? 'w' : 'wx' });
+}
+
+function readModpackLoader(index) {
+  const dependencies = index?.dependencies ?? {};
+  if (!dependencies.minecraft || typeof dependencies.minecraft !== 'string') throw new Error('В сборке не указана версия Minecraft.');
+  const supported = [
+    ['fabric-loader', 'fabric'],
+    ['quilt-loader', 'quilt'],
+    ['forge', 'forge'],
+    ['neoforge', 'neoforge'],
+  ].filter(([key]) => typeof dependencies[key] === 'string' && dependencies[key]);
+  if (supported.length > 1) throw new Error('Сборка указывает несколько загрузчиков. Выберите другую Modrinth-сборку.');
+  if (!supported.length) return { version: dependencies.minecraft, loader: 'vanilla', loaderVersion: '' };
+  const [key, loader] = supported[0];
+  let loaderVersion = validateLoaderVersion(dependencies[key]);
+  if (loader === 'forge' && !loaderVersion.startsWith(`${dependencies.minecraft}-`)) loaderVersion = `${dependencies.minecraft}-${loaderVersion}`;
+  return { version: dependencies.minecraft, loader, loaderVersion };
+}
+
+async function installModrinthArchive(archivePath, instanceRoot, requestedVersion, requestedLoader) {
+  const archive = await unzipper.Open.file(archivePath);
+  if (archive.files.length > MAX_MODPACK_ENTRIES) throw new Error('В сборке слишком много файлов.');
+  const uncompressedTotal = archive.files.reduce((total, entry) => total + (Number(entry.uncompressedSize) || 0), 0);
+  if (uncompressedTotal > MAX_MODPACK_TOTAL_SIZE) throw new Error('Распакованный размер сборки превышает 2 ГБ.');
+  const indexEntry = archive.files.find((entry) => entry.path === 'modrinth.index.json' && entry.type === 'File');
+  if (!indexEntry || Number(indexEntry.uncompressedSize) > 4 * 1024 * 1024) throw new Error('В .mrpack нет допустимого modrinth.index.json.');
+  let index;
+  try { index = JSON.parse((await indexEntry.buffer()).toString('utf8')); } catch { throw new Error('Манифест Modrinth-сборки повреждён.'); }
+  if (index.formatVersion !== 1 || index.game !== 'minecraft' || !Array.isArray(index.files)) throw new Error('Формат этой Modrinth-сборки не поддерживается.');
+  const resolved = readModpackLoader(index);
+  if (resolved.version !== requestedVersion || resolved.loader !== requestedLoader) throw new Error('Версия или загрузчик в сборке не совпадают с выбранными фильтрами.');
+  if (index.files.length > MAX_MODPACK_ENTRIES) throw new Error('В манифесте сборки слишком много файлов.');
+
+  const destinations = new Set();
+  let totalDownloads = 0;
+  let missingFiles = 0;
+  for (const item of index.files) {
+    if (!item || typeof item.path !== 'string' || !Array.isArray(item.downloads)) throw new Error('Манифест сборки содержит файл с неверным форматом.');
+    const target = safeModpackPath(instanceRoot, item.path);
+    const key = process.platform === 'win32' ? target.toLowerCase() : target;
+    if (destinations.has(key)) throw new Error('В сборке повторяется путь к файлу.');
+    destinations.add(key);
+    if (item.env?.client === 'unsupported' || item.env?.client === 'optional') continue;
+    const fileSize = Number(item.fileSize);
+    if (!Number.isFinite(fileSize) || fileSize < 0 || fileSize > MAX_MODPACK_FILE_SIZE) throw new Error(`Файл ${path.basename(item.path)} превышает допустимый размер.`);
+    totalDownloads += fileSize;
+    if (totalDownloads > MAX_MODPACK_TOTAL_SIZE) throw new Error('Общий размер файлов сборки превышает 2 ГБ.');
+    if (!item.downloads.length) { missingFiles += 1; continue; }
+    let buffer = null;
+    let lastError = null;
+    for (const rawUrl of item.downloads.slice(0, 5)) {
+      try {
+        buffer = await fetchVerifiedModpackFile(rawUrl, fileSize, item.hashes, MAX_MODPACK_FILE_SIZE);
+        break;
+      } catch (error) { lastError = error; }
+    }
+    if (!buffer) throw new Error(`Не удалось проверить ${path.basename(item.path)}: ${lastError instanceof Error ? lastError.message : 'ошибка загрузки'}`);
+    await writeModpackFile(instanceRoot, item.path, buffer);
+  }
+
+  for (const entry of archive.files) {
+    if (entry.type !== 'File') continue;
+    let relativePath = null;
+    if (entry.path.startsWith('overrides/')) relativePath = entry.path.slice('overrides/'.length);
+    else if (entry.path.startsWith('client-overrides/')) relativePath = entry.path.slice('client-overrides/'.length);
+    if (!relativePath) continue;
+    safeModpackPath(instanceRoot, relativePath);
+    const size = Number(entry.uncompressedSize) || 0;
+    if (size > MAX_MODPACK_ENTRY_SIZE) throw new Error(`Файл ${path.basename(relativePath)} в сборке слишком велик.`);
+    const buffer = await entry.buffer();
+    if (buffer.length !== size) throw new Error(`Не удалось прочитать ${path.basename(relativePath)} из сборки.`);
+    await writeModpackFile(instanceRoot, relativePath, buffer, true);
+  }
+  return { ...resolved, missingFiles };
 }
 
 async function collectRequiredDependencies(version, gameVersion, loader, collected, depth = 0) {
@@ -542,7 +737,7 @@ function registerIpcHandlers() {
     await resolveGameVersion(version);
     const instances = getInstances();
     const id = `bloom-${Date.now().toString(36)}-${crypto.randomBytes(3).toString('hex')}`;
-    const instance = { id, name, version, loader, loaderVersion: '', createdAt: new Date().toISOString() };
+    const instance = { id, name, version, loader, loaderVersion: '', source: 'profile', createdAt: new Date().toISOString() };
     instances.unshift(instance);
     await saveInstances(instances);
     if (!getLauncherSettings().activeInstanceId) await updateLauncherSettings({ activeInstanceId: id });
@@ -662,7 +857,7 @@ function registerIpcHandlers() {
       if (javaPath && !fs.existsSync(javaPath)) throw new Error('Выбранный файл Java не найден. Укажите путь заново или включите автоустановку.');
       const gameVersion = await resolveGameVersion(instance.version);
       const loader = validateLoader(instance.loader);
-      const loaderVersion = await getLoaderVersion(gameVersion, loader);
+      const loaderVersion = instance.loaderVersion ? validateLoaderVersion(instance.loaderVersion) : await getLoaderVersion(gameVersion, loader);
       const account = await ensureFreshAccount(savedAccount);
       const { Launcher } = await import('eml-lib');
       const launcher = new Launcher({
@@ -718,12 +913,12 @@ function registerIpcHandlers() {
   });
 
   ipcMain.handle('modrinth:search', async (_event, input) => {
-    const type = input?.type === 'resourcepack' ? 'resourcepack' : 'mod';
+    const type = ['resourcepack', 'modpack'].includes(input?.type) ? input.type : 'mod';
     const query = sanitizeText(input?.query, 100);
     const facets = [[`project_type:${type}`]];
     if (input?.version) facets.push([`versions:${sanitizeText(input.version, 40)}`]);
     const loader = String(input?.loader ?? 'all');
-    if (type === 'mod' && loader !== 'all' && loader !== 'vanilla' && ALLOWED_LOADERS.has(loader)) facets.push([`categories:${loader}`]);
+    if ((type === 'mod' || type === 'modpack') && loader !== 'all' && loader !== 'vanilla' && ALLOWED_LOADERS.has(loader)) facets.push([`categories:${loader}`]);
     const category = sanitizeText(input?.category, 40);
     if (category && /^[a-z0-9_-]+$/.test(category)) facets.push([`categories:${category}`]);
     const params = new URLSearchParams({ query, facets: JSON.stringify(facets), limit: '30', index: 'downloads' });
@@ -764,6 +959,56 @@ function registerIpcHandlers() {
       throw error;
     }
     return { installed: installed.map((item) => item.name) };
+  });
+
+  ipcMain.handle('modrinth:install-pack', async (_event, input) => {
+    const projectId = sanitizeText(input?.projectId, 128);
+    if (!/^[a-zA-Z0-9_-]+$/.test(projectId)) throw new Error('Некорректный идентификатор Modrinth-сборки.');
+    const gameVersion = await resolveGameVersion(sanitizeText(input?.gameVersion, 40));
+    const loader = validateLoader(input?.loader);
+    const projectResponse = await fetch(`${MODRINTH_API}/project/${encodeURIComponent(projectId)}`, {
+      headers: { 'User-Agent': 'BloomClient/0.5 (+https://github.com/zxcwmd/zxc)' },
+    });
+    if (!projectResponse.ok) throw new Error(`Не удалось открыть Modrinth-сборку (HTTP ${projectResponse.status}).`);
+    const project = await projectResponse.json();
+    if (project.project_type !== 'modpack') throw new Error('Выбранный проект Modrinth не является сборкой Minecraft.');
+    const name = sanitizeText(input?.name || project.title, 36);
+    if (!name) throw new Error('У Modrinth-сборки нет допустимого названия.');
+    const packVersion = await fetchModrinthPackVersion(projectId, gameVersion, loader);
+    const packFile = selectModpackFile(packVersion);
+    const packBuffer = await fetchVerifiedModpackFile(packFile.url, packFile.size, packFile.hashes, MAX_MODPACK_ARCHIVE_SIZE);
+    const temporaryDirectory = await fsp.mkdtemp(path.join(app.getPath('temp'), 'bloom-modrinth-'));
+    const archivePath = path.join(temporaryDirectory, 'pack.mrpack');
+    const id = `bloom-${Date.now().toString(36)}-${crypto.randomBytes(3).toString('hex')}`;
+    const root = getMinecraftRoot(id);
+    let instanceSaved = false;
+    try {
+      await fsp.writeFile(archivePath, packBuffer, { flag: 'wx' });
+      const installed = await installModrinthArchive(archivePath, root, gameVersion, loader);
+      const instance = {
+        id,
+        name,
+        version: installed.version,
+        loader: installed.loader,
+        loaderVersion: installed.loaderVersion,
+        source: 'modrinth',
+        modpackProjectId: projectId,
+        modpackProjectTitle: sanitizeText(project.title, 100),
+        modpackVersionId: sanitizeText(packVersion.id, 80),
+        missingPackFiles: installed.missingFiles,
+        createdAt: new Date().toISOString(),
+      };
+      await saveInstances([instance, ...getInstances()]);
+      instanceSaved = true;
+      await updateLauncherSettings({ activeInstanceId: id });
+      return instanceSummary(instance);
+    } catch (error) {
+      if (instanceSaved) await saveInstances(getInstances().filter((instance) => instance.id !== id)).catch(() => {});
+      await fsp.rm(root, { recursive: true, force: true }).catch(() => {});
+      throw error;
+    } finally {
+      await fsp.rm(temporaryDirectory, { recursive: true, force: true }).catch(() => {});
+    }
   });
 
   ipcMain.handle('content:list', async (_event, input) => {

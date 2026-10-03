@@ -1,6 +1,6 @@
 {
   "name": "bloom-client",
-  "version": "0.5.2",
+  "version": "0.5.3",
   "description": "Bloom Client — Minecraft launcher",
   "author": "Bloom Client",
   "private": true,
@@ -63,6 +63,7 @@
   },
   "dependencies": {
     "eml-lib": "^2.7.3",
-    "skinview3d": "^3.4.2"
+    "skinview3d": "^3.4.2",
+    "unzipper": "^0.12.5"
   }
 }

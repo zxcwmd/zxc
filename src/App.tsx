@@ -23,7 +23,6 @@ import {
   FileCode2,
   Gamepad2,
   Gauge,
-  Globe2,
   HardDriveDownload,
   Layers3,
   LockKeyhole,
@@ -43,7 +42,6 @@ import {
   Upload,
   UserRound,
   UsersRound,
-  WandSparkles,
   X,
   Zap,
 } from 'lucide-react';
@@ -63,17 +61,16 @@ import type {
 } from './types';
 
 const NAV_ITEMS = [
-  { id: 'home', label: 'Главная', icon: Gamepad2, group: 'ИГРА' },
-  { id: 'instances', label: 'Профили', icon: Layers3, group: 'ИГРА' },
-  { id: 'catalog', label: 'Каталог', icon: Globe2, group: 'КОНТЕНТ' },
-  { id: 'hud', label: 'HUD и FPS', icon: SlidersHorizontal, group: 'НАСТРОЙКА' },
-  { id: 'skins', label: 'Скины', icon: Shirt, group: 'НАСТРОЙКА' },
-  { id: 'settings', label: 'Параметры', icon: Settings2, group: 'СИСТЕМА' },
+  { id: 'mods', label: 'Моды', icon: Blocks, group: 'КОНТЕНТ', page: 'catalog', contentType: 'mod' },
+  { id: 'resourcepacks', label: 'Ресурспаки', icon: Paintbrush2, group: 'КОНТЕНТ', page: 'catalog', contentType: 'resourcepack' },
+  { id: 'builds', label: 'Сборки', icon: Layers3, group: 'ИГРА', page: 'builds' },
+  { id: 'settings', label: 'Настройки', icon: Settings2, group: 'СИСТЕМА', page: 'settings' },
 ] as const;
 
-type PageId = (typeof NAV_ITEMS)[number]['id'];
+type PageId = 'home' | 'catalog' | 'builds' | 'playSetup' | 'hud' | 'skins' | 'settings';
 type ModalId = 'auth' | 'instance' | 'launch' | null;
 type VersionFilter = 'all' | VersionType;
+type BuildsTab = 'profiles' | 'modrinth';
 
 const LOADER_LABELS: Record<LoaderType, string> = {
   vanilla: 'Vanilla',
@@ -267,6 +264,8 @@ function App() {
   const [activePage, setActivePage] = useState<PageId>('home');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [catalogType, setCatalogType] = useState<ContentType>('mod');
+  const [buildsTab, setBuildsTab] = useState<BuildsTab>('profiles');
+  const [launchInstanceOverride, setLaunchInstanceOverride] = useState<GameInstance | null>(null);
   const [bootstrap, setBootstrap] = useState<BootstrapState | null>(null);
   const [versions, setVersions] = useState<GameVersion[]>([]);
   const [loadingApp, setLoadingApp] = useState(true);
@@ -289,7 +288,7 @@ function App() {
   const activeAccount = accounts.find((account) => account.id === bootstrap?.activeAccountId) ?? null;
   const instances = bootstrap?.instances ?? [];
   const activeInstance = instances.find((instance) => instance.id === bootstrap?.activeInstanceId) ?? instances[0] ?? null;
-  const title = NAV_ITEMS.find((item) => item.id === activePage)?.label ?? 'Главная';
+  const title = activePage === 'home' ? 'Главная' : activePage === 'catalog' ? (catalogType === 'mod' ? 'Моды' : 'Ресурспаки') : activePage === 'builds' ? 'Сборки' : activePage === 'playSetup' ? 'Играть' : activePage === 'hud' ? 'Визуал и производительность' : activePage === 'skins' ? 'Скин' : 'Настройки';
   const maxMemoryGb = Math.max(2, Math.min(32, Math.floor((bootstrap?.totalMemoryMb ?? 16384) / 1024) - 2));
 
   const refreshBootstrap = useCallback(async () => {
@@ -389,6 +388,11 @@ function App() {
     changePage('catalog');
   };
 
+  const openBuilds = (tab: BuildsTab = 'profiles') => {
+    setBuildsTab(tab);
+    changePage('builds');
+  };
+
   const setActiveInstance = async (instanceId: string) => {
     if (!window.bloom) return;
     try {
@@ -418,6 +422,53 @@ function App() {
     }
   };
 
+  const handleInstallModrinthPack = async (project: ModrinthProject, version: string, loader: LoaderType) => {
+    if (!window.bloom) {
+      notify('Установка Modrinth-сборок доступна в установленном desktop-приложении.');
+      return;
+    }
+    setIsBusy(true);
+    try {
+      const instance = await window.bloom.installModrinthPack({ projectId: project.project_id, name: project.title, gameVersion: version, loader });
+      await refreshBootstrap();
+      setBuildsTab('profiles');
+      notify(instance.missingPackFiles ? `Сборка «${instance.name}» установлена. ${instance.missingPackFiles} файл(а) нужно добавить вручную.` : `Сборка «${instance.name}» установлена в отдельный профиль.`);
+    } catch (error) {
+      notify(error instanceof Error ? error.message : 'Не удалось установить Modrinth-сборку.');
+    } finally {
+      setIsBusy(false);
+    }
+  };
+
+  const createAndLaunch = async (input: { name: string; version: string; loader: LoaderType }) => {
+    if (!window.bloom) {
+      notify('Создание профилей доступно в desktop-версии Bloom Client.');
+      return;
+    }
+    setIsBusy(true);
+    try {
+      const instance = await window.bloom.createInstance(input);
+      await window.bloom.setActiveInstance(instance.id);
+      await refreshBootstrap();
+      setLaunchInstanceOverride(instance);
+      if (!activeAccount) {
+        setModal('auth');
+        notify(`Профиль «${instance.name}» создан. Войди, чтобы запустить Minecraft.`);
+        return;
+      }
+      setLauncherEvent({ kind: 'phase', message: `Готовим запуск профиля «${instance.name}»…` });
+      setModal('launch');
+      await window.bloom.launchGame({ instanceId: instance.id, memoryGb });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Не удалось создать профиль или запустить Minecraft.';
+      setLauncherEvent({ kind: 'error', message });
+      setModal('launch');
+      notify(message);
+    } finally {
+      setIsBusy(false);
+    }
+  };
+
   const beginLaunch = async (requestedInstanceId?: string) => {
     if (!desktop || !window.bloom) {
       notify('Запуск и установка Minecraft работают в установленной desktop-версии.');
@@ -427,9 +478,10 @@ function App() {
       ? instances.find((item) => item.id === requestedInstanceId) ?? null
       : activeInstance;
     if (!targetInstance) {
-      setModal('instance');
+      changePage('playSetup');
       return;
     }
+    setLaunchInstanceOverride(targetInstance);
     if (!activeAccount) {
       setModal('auth');
       return;
@@ -495,34 +547,26 @@ function App() {
           <HomePage
             account={activeAccount}
             instance={activeInstance}
-            instances={instances}
             versions={versions}
             skin={previewSkin ?? skin.skinDataUrl}
             cape={skin.capeDataUrl}
             desktop={desktop}
-            onPlay={() => void beginLaunch()}
+            onPlay={() => changePage('playSetup')}
             onOpenAuth={() => setModal('auth')}
-            onCreate={() => setModal('instance')}
-            onOpenInstances={() => changePage('instances')}
+            onOpenInstances={() => openBuilds('profiles')}
             onOpenCatalog={openCatalog}
-            onSelectInstance={setActiveInstance}
+            onOpenSettings={() => changePage('settings')}
           />
         );
-      case 'instances':
+      case 'builds':
         return (
-          <InstancesPage
-            instances={instances}
-            activeInstance={activeInstance}
-            versions={versions}
-            desktop={desktop}
-            isBusy={isBusy}
-            onCreate={() => setModal('instance')}
-            onSelect={setActiveInstance}
-            onPlay={(instanceId) => void beginLaunch(instanceId)}
-            onRefresh={refreshBootstrap}
-            onNotify={notify}
-          />
+          <div className="builds-route">
+            <div className="builds-page-tabs"><button className={buildsTab === 'profiles' ? 'selected' : ''} type="button" onClick={() => setBuildsTab('profiles')}><Layers3 size={15} />Профили Bloom <span>{instances.length}</span></button><button className={buildsTab === 'modrinth' ? 'selected' : ''} type="button" onClick={() => setBuildsTab('modrinth')}><Blocks size={15} />Modrinth-сборки</button></div>
+            {buildsTab === 'profiles' ? <InstancesPage instances={instances} activeInstance={activeInstance} versions={versions} desktop={desktop} isBusy={isBusy} onCreate={() => setModal('instance')} onSelect={setActiveInstance} onPlay={(instanceId) => void beginLaunch(instanceId)} onRefresh={refreshBootstrap} onNotify={notify} /> : <ModrinthBuildsPage versions={versions} activeInstance={activeInstance} desktop={desktop} onCreateProfile={() => setModal('instance')} onInstallPack={handleInstallModrinthPack} />}
+          </div>
         );
+      case 'playSetup':
+        return <PlaySetupPage instances={instances} activeInstance={activeInstance} versions={versions} account={activeAccount} desktop={desktop} isBusy={isBusy} onPlay={(instanceId) => void beginLaunch(instanceId)} onCreateAndPlay={(input) => void createAndLaunch(input)} onOpenBuilds={() => openBuilds('modrinth')} onOpenSettings={() => changePage('settings')} onBack={() => changePage('home')} />;
       case 'catalog':
         return (
           <CatalogPage
@@ -568,6 +612,8 @@ function App() {
           <SettingsPage
             versions={versions}
             bootstrap={bootstrap}
+            onOpenHud={() => changePage('hud')}
+            onOpenSkins={() => changePage('skins')}
             accounts={accounts}
             activeAccount={activeAccount}
             desktop={desktop}
@@ -594,7 +640,7 @@ function App() {
   };
 
   return (
-    <div className="client-shell">
+    <div className={`client-shell ${activePage === 'home' ? 'home-shell' : ''}`}>
       <aside className={`sidebar ${mobileMenuOpen ? 'sidebar-open' : ''}`}>
         <button className="brand" type="button" onClick={() => changePage('home')} aria-label="Bloom Client, на главную">
           <BrandGlyph />
@@ -603,17 +649,27 @@ function App() {
         </button>
 
         <div className="nav-scroll">
-          {['ИГРА', 'КОНТЕНТ', 'НАСТРОЙКА', 'СИСТЕМА'].map((group) => (
+          {['ИГРА', 'КОНТЕНТ', 'СИСТЕМА'].map((group) => (
             <div className="nav-group" key={group}>
               <div className="nav-label">{group}</div>
               {NAV_ITEMS.filter((item) => item.group === group).map((item) => {
                 const Icon = item.icon;
+                const selected = item.id === 'mods' ? activePage === 'catalog' && catalogType === 'mod'
+                  : item.id === 'resourcepacks' ? activePage === 'catalog' && catalogType === 'resourcepack'
+                    : item.id === 'settings' ? ['settings', 'hud', 'skins'].includes(activePage)
+                      : activePage === item.id;
+                const activate = () => {
+                  if (item.id === 'mods') openCatalog('mod');
+                  else if (item.id === 'resourcepacks') openCatalog('resourcepack');
+                  else if (item.id === 'builds') openBuilds('profiles');
+                  else changePage('settings');
+                };
                 return (
-                  <button className={`nav-link ${activePage === item.id ? 'nav-link-active' : ''}`} type="button" key={item.id} onClick={() => changePage(item.id)}>
+                  <button className={`nav-link ${selected ? 'nav-link-active' : ''}`} type="button" key={item.id} onClick={activate}>
                     <Icon size={17} strokeWidth={1.75} />
                     <span>{item.label}</span>
-                    {item.id === 'catalog' && <span className="nav-live-dot" />}
-                    {activePage === item.id && <span className="nav-active-bar" />}
+                    {(item.id === 'mods' || item.id === 'resourcepacks') && <span className="nav-live-dot" />}
+                    {selected && <span className="nav-active-bar" />}
                   </button>
                 );
               })}
@@ -658,7 +714,7 @@ function App() {
           </div>
         </header>
 
-        {!desktop && <div className="preview-banner"><MonitorPlay size={15} /><span>Это интерактивный preview. Авторизация, запись файлов и запуск доступны в установленном приложении.</span><button type="button" onClick={() => void openExternal('https://github.com/zxcwmd/zxc/releases/tag/v0.5.2-preview.1')}>Скачать приложение</button></div>}
+        {!desktop && <div className="preview-banner"><MonitorPlay size={15} /><span>Это интерактивный preview. Авторизация, запись файлов и запуск доступны в установленном приложении.</span><button type="button" onClick={() => void openExternal('https://github.com/zxcwmd/zxc/releases/tag/v0.5.3-preview.1')}>Скачать приложение</button></div>}
         <div className="content-scroll">
           {loadingApp && <div className="loading-line"><span />Подготавливаем библиотеку Bloom…</div>}
           {versionsError && <div className="inline-warning"><CircleHelp size={16} /><span>Список версий Minecraft временно недоступен. Проверьте подключение к интернету и повторите попытку.</span><button type="button" onClick={() => void loadVersions()}>Повторить</button></div>}
@@ -670,7 +726,7 @@ function App() {
       {toast && <div className="toast"><span className="toast-check"><Check size={14} /></span>{toast}</div>}
       {modal === 'auth' && <AuthModal onClose={() => setModal(null)} onSuccess={handleAccountChange} />}
       {modal === 'instance' && <InstanceModal versions={versions} isBusy={isBusy} onClose={() => setModal(null)} onCreate={handleCreateInstance} />}
-      {modal === 'launch' && <LaunchModal event={launcherEvent} instance={activeInstance} versions={versions} onClose={() => setModal(null)} />}
+      {modal === 'launch' && <LaunchModal event={launcherEvent} instance={launchInstanceOverride ?? activeInstance} versions={versions} onClose={() => { setModal(null); setLaunchInstanceOverride(null); }} />}
     </div>
   );
 }
@@ -700,88 +756,63 @@ function PageHeading({ eyebrow, title, description, action }: { eyebrow: string;
 function HomePage({
   account,
   instance,
-  instances,
   versions,
   skin,
   cape,
   desktop,
   onPlay,
   onOpenAuth,
-  onCreate,
   onOpenInstances,
   onOpenCatalog,
-  onSelectInstance,
+  onOpenSettings,
 }: {
   account: AccountSummary | null;
   instance: GameInstance | null;
-  instances: GameInstance[];
   versions: GameVersion[];
   skin: string | null;
   cape: string | null;
   desktop: boolean;
   onPlay: () => void;
   onOpenAuth: () => void;
-  onCreate: () => void;
   onOpenInstances: () => void;
   onOpenCatalog: (type: ContentType) => void;
-  onSelectInstance: (id: string) => void;
+  onOpenSettings: () => void;
 }) {
   const latestRelease = versions.find((version) => version.type === 'release')?.id ?? '—';
   return (
-    <div className="page page-home">
-      <section className="hero-card">
-        <div className="hero-atmosphere" aria-hidden="true" />
-        <div className="hero-copy">
-          <div className="hero-overline"><span className="hero-live" /> ВИШНЁВАЯ РОЩА · ТВОЙ СЛЕДУЮЩИЙ МИР</div>
-          <h1>Играй.<br /><em>По-своему.</em></h1>
-          <p>Твои версии, моды и настройки — в одном красивом месте. Без лишних экранов и сложных сборок.</p>
-          <div className="hero-actions">
-            <button className="button button-primary play-button" type="button" onClick={onPlay} disabled={!instance && !desktop}>
-              <Play size={17} fill="currentColor" />{instance ? 'Запустить Minecraft' : 'Создать профиль'}<ArrowRight size={16} />
-            </button>
-            {!account && <button className="button button-subtle" type="button" onClick={onOpenAuth}><UserRound size={16} /> Подключить аккаунт</button>}
+    <div className="home-scene-page">
+      <section className="home-scene-card">
+        <div className="home-scene-shade" aria-hidden="true" />
+        <div className="home-scene-petals" aria-hidden="true" />
+        <header className="home-scene-header">
+          <div className="home-scene-brand">
+            <BrandGlyph /><span><strong>Bloom Client</strong><small>CHERRY GROVE EDITION</small></span>
           </div>
-          <div className="hero-trust"><ShieldCheck size={15} /><span>Официальные файлы игры</span><span className="hero-separator">·</span><span>Без offline-режима</span></div>
-        </div>
-        <div className="hero-avatar-area">
-          <div className="hero-world-chip"><span className="pulse-point" />ВИШНЁВАЯ ОПУШКА</div>
-          <div className="hero-character-frame"><div className="hero-glow" /><SkinPreview skin={skin} cape={cape} name={account?.name ?? 'Bloom'} className="hero-skin" pose="seated" /></div>
-          <div className="hero-avatar-caption"><span className="caption-label">{account ? 'У КОСТРА' : 'ПРИМЕР СКИНА'}</span><strong>{account?.name ?? 'Bloom Explorer'}</strong><span className="avatar-caption-dot"><i />{account ? providerLabel(account.provider) : 'Подключи аккаунт'}</span></div>
-          <div className="floating-chip chip-spark"><Sparkles size={14} />Вечер у костра</div>
-        </div>
-        <div className="hero-bottom-line"><span>v0.5.2</span><span>WINDOWS · JAVA EDITION</span><span>СОБЕРИ СВОЙ СЛЕДУЮЩИЙ МИР <span className="hero-line-dot">✳</span></span></div>
+          <div className="home-scene-location"><span className="hero-live" /> CHERRY GROVE <i /> MAIN MENU</div>
+          <button className="home-scene-account" type="button" onClick={account ? onOpenSettings : onOpenAuth}>
+            <Avatar account={account} size="small" /><span><strong>{account?.name ?? 'Подключить аккаунт'}</strong><small>{account ? providerLabel(account.provider) : 'Microsoft · Ely.by'}</small></span><ChevronDown size={15} />
+          </button>
+        </header>
+
+        <div className="home-scene-title"><span className="scene-overline"><Sparkles size={13} /> ТВОЁ МЕСТО В МИРЕ MINECRAFT</span><h1>Bloom <em>Client</em></h1><p>Собери своё приключение.</p></div>
+
+        <div className="home-scene-world-chip"><span className="pulse-point" />ВИШНЁВАЯ ОПУШКА <i /> v{latestRelease}</div>
+        <div className="home-scene-player"><div className="scene-player-glow" /><SkinPreview skin={skin} cape={cape} name={account?.name ?? 'Bloom Explorer'} className="home-scene-skin" pose="seated" /><div className="scene-player-caption"><span>{account ? 'ИГРОК У КОСТРА' : 'DEMO PLAYER'}</span><strong>{account?.name ?? 'Bloom Explorer'}</strong></div></div>
+        <div className="home-scene-caption"><span>ТИШИНА. ТЁПЛЫЙ СВЕТ. И ЦЕЛЫЙ МИР ВПЕРЕДИ.</span><span>JAVA EDITION · {desktop ? 'DESKTOP CLIENT' : 'WEB PREVIEW'}</span></div>
+
+        <nav className="home-round-nav" aria-label="Разделы Bloom Client">
+          <button type="button" onClick={() => onOpenCatalog('mod')}><span className="round-nav-icon"><Blocks size={21} /></span><strong>Моды</strong><small>MODS</small></button>
+          <button type="button" onClick={() => onOpenCatalog('resourcepack')}><span className="round-nav-icon"><Paintbrush2 size={21} /></span><strong>Ресурспаки</strong><small>TEXTURES</small></button>
+          <button type="button" onClick={onOpenInstances}><span className="round-nav-icon"><Layers3 size={21} /></span><strong>Сборки</strong><small>BUILDS</small></button>
+          <button type="button" onClick={onOpenSettings}><span className="round-nav-icon"><Settings2 size={21} /></span><strong>Настройки</strong><small>SETTINGS</small></button>
+        </nav>
+
+        <footer className="home-scene-footer">
+          <button className="home-selected-build" type="button" onClick={onOpenInstances}><span className="selected-build-glyph"><Layers3 size={17} /></span><span><small>АКТИВНАЯ СБОРКА</small><strong>{instance?.name ?? 'Сначала выбери сборку'}</strong><em>{instance ? `${displayVersion(instance.version, versions)} · ${LOADER_LABELS[instance.loader]} · ${instance.source === 'modrinth' ? instance.missingPackFiles ? `${instance.missingPackFiles} файлов вручную` : 'Modrinth-пакет загружен' : instance.installed ? 'готова к игре' : 'установится при запуске'}` : 'Профиль Bloom или Modrinth-пакет'}</em></span><ChevronRight size={16} /></button>
+          <button className="button button-primary home-play-button" type="button" onClick={onPlay}><Play size={16} fill="currentColor" /><span>Играть</span><ArrowRight size={16} /></button>
+        </footer>
+        {!account && <button className="home-account-hint" type="button" onClick={onOpenAuth}><LockKeyhole size={13} />Подключи Microsoft или Ely.by для запуска игры</button>}
       </section>
-
-      <div className="home-section-heading">
-        <div><div className="eyebrow"><span />ТВОЯ ИГРА</div><h2>Продолжим?</h2></div>
-        <button className="text-link" type="button" onClick={onOpenInstances}>Все профили <ArrowRight size={15} /></button>
-      </div>
-
-      <div className="home-grid">
-        <section className="active-instance-card">
-          <div className="card-topline"><span className="section-label">АКТИВНЫЙ ПРОФИЛЬ</span><span className={`install-status ${instance?.installed ? 'is-installed' : ''}`}><i />{instance?.installed ? 'УСТАНОВЛЕН' : 'ЕЩЁ НЕ УСТАНОВЛЕН'}</span></div>
-          {instance ? (
-            <>
-              <div className="instance-title-row"><div className="instance-game-icon"><Box size={21} /></div><div><h3>{instance.name}</h3><p>Изолированная папка · сохранения в безопасности</p></div><button className="icon-button" type="button" aria-label="Все профили" onClick={onOpenInstances}><ArrowUpRight size={17} /></button></div>
-              <div className="instance-specs"><div><small>ВЕРСИЯ ИГРЫ</small><strong>{displayVersion(instance.version, versions)}</strong></div><span className="spec-divider" /><div><small>ЗАГРУЗЧИК</small><strong>{LOADER_LABELS[instance.loader]}</strong></div><span className="spec-divider" /><div><small>ДОБАВЛЕНО МОДОВ</small><strong>{instance.contentCount ?? 0}</strong></div></div>
-              <div className="instance-card-footer"><span><HardDriveDownload size={14} />{instance.installed ? 'Файлы готовы' : 'Подготовится при первом запуске'}</span><button type="button" onClick={onPlay}><Play size={14} fill="currentColor" />Играть</button></div>
-            </>
-          ) : (
-            <div className="empty-instance"><div className="empty-icon"><Layers3 size={21} /></div><h3>Здесь начинается твоя сборка</h3><p>Создай профиль: выбери любую версию Minecraft, загрузчик и память для игры.</p><button className="button button-outline" type="button" onClick={onCreate}><Plus size={16} />Создать профиль</button></div>
-          )}
-        </section>
-
-        <section className="quick-panel">
-          <div className="card-topline"><span className="section-label">БЫСТРЫЙ СТАРТ</span><span className="quick-badge"><Sparkles size={12} /> BLOOM</span></div>
-          <button className="quick-row" type="button" onClick={() => onOpenCatalog('mod')}><span className="quick-row-icon quick-purple"><Package size={17} /></span><span><strong>Найти моды</strong><small>Каталог Modrinth</small></span><ChevronRight size={16} /></button>
-          <button className="quick-row" type="button" onClick={() => onOpenCatalog('resourcepack')}><span className="quick-row-icon quick-green"><Paintbrush2 size={17} /></span><span><strong>Обновить текстуры</strong><small>Ресурспаки и атмосфера</small></span><ChevronRight size={16} /></button>
-          <button className="quick-row" type="button" onClick={onOpenAuth}><span className="quick-row-icon quick-blue"><LockKeyhole size={17} /></span><span><strong>{account ? 'Аккаунт подключён' : 'Безопасный вход'}</strong><small>{account ? providerLabel(account.provider) : 'Microsoft или Ely.by'}</small></span><ChevronRight size={16} /></button>
-          <div className="quick-foot"><span><ShieldCheck size={14} />Без никнейм-входа и обходов</span><span>Последний релиз {latestRelease}</span></div>
-        </section>
-      </div>
-
-      <div className="home-footer-note"><div className="note-mark"><WandSparkles size={16} /></div><span><strong>Всё готово для твоего мира.</strong> {instances.length ? 'Выбери профиль и запускай — Java устанавливается автоматически.' : 'Выбери версию и собери профиль так, как нравится тебе.'}</span>{!account && <button type="button" onClick={onOpenAuth}>Подключить вход <ArrowRight size={14} /></button>}{!desktop && <small>browser preview</small>}</div>
-      {instances.length > 1 && <div className="home-instance-switcher"><span>ПРОФИЛЬ</span>{instances.slice(0, 3).map((item) => <button key={item.id} className={item.id === instance?.id ? 'switcher-current' : ''} type="button" onClick={() => onSelectInstance(item.id)}>{item.name}</button>)}</div>}
     </div>
   );
 }
@@ -830,15 +861,15 @@ function InstancesPage({
 
   return (
     <div className="page">
-      <PageHeading eyebrow="ТВОИ МИРЫ" title="Игровые профили" description="Каждый профиль — отдельная версия Minecraft со своими модами, ресурсами и сохранениями." action={<button className="button button-primary" type="button" onClick={onCreate} disabled={!desktop}><Plus size={16} />Новый профиль</button>} />
+      <PageHeading eyebrow="ТВОИ СБОРКИ" title="Мои игровые сборки" description="Профили Bloom и установленные Modrinth-сборки. У каждого — своя версия, загрузчик, контент и сохранения." action={<button className="button button-primary" type="button" onClick={onCreate} disabled={!desktop}><Plus size={16} />Новый профиль</button>} />
       <div className="instance-summary-strip"><div><span className="summary-icon"><Layers3 size={17} /></span><span><small>ПРОФИЛЕЙ</small><strong>{instances.length}</strong></span></div><div><span className="summary-icon summary-mint"><Package size={17} /></span><span><small>ИГРОВЫЕ ВЕРСИИ</small><strong>{versions.length ? `${versions.length}+` : '—'}</strong></span></div><div><span className="summary-icon summary-violet"><HardDriveDownload size={17} /></span><span><small>УСТАНОВЛЕНО</small><strong>{instances.filter((instance) => instance.installed).length}</strong></span></div><div className="versions-footnote"><Clock3 size={14} /> В каталоге доступны релизы, снапшоты, Beta и Alpha.</div></div>
       <div className="toolbar-row"><div className="filter-pills"><button className={filter === 'all' ? 'filter-active' : ''} type="button" onClick={() => setFilter('all')}>Все <span>{instances.length}</span></button>{Object.entries(LOADER_LABELS).map(([value, label]) => <button className={filter === value ? 'filter-active' : ''} key={value} type="button" onClick={() => setFilter(value)}>{label}</button>)}</div><span className="toolbar-note"><ShieldCheck size={14} /> Профили изолированы друг от друга</span></div>
       {visibleInstances.length ? (
         <div className="instance-grid">
           {visibleInstances.map((instance) => (
             <article className={`profile-card ${instance.id === activeInstance?.id ? 'profile-card-active' : ''}`} key={instance.id}>
-              <div className="profile-card-art"><div className={`profile-art-orb art-${instance.loader}`} /><span className="profile-art-stamp">BLOOM / {LOADER_LABELS[instance.loader].toUpperCase()}</span><div className="profile-art-block"><Box size={38} strokeWidth={1.15} /></div><span className={`profile-installed ${instance.installed ? 'installed' : ''}`}><i />{instance.installed ? 'Installed' : 'Not installed'}</span></div>
-              <div className="profile-card-body"><div className="profile-card-title"><div><h3>{instance.name}</h3><p>{displayVersion(instance.version, versions)} <span>·</span> {LOADER_LABELS[instance.loader]}</p></div><button className="icon-button" aria-label={`Удалить профиль ${instance.name}`} type="button" onClick={() => void removeInstance(instance)} disabled={!desktop || deletingId === instance.id}><Trash2 size={15} /></button></div><div className="profile-card-stats"><span><Package size={14} />{instance.contentCount ?? 0} модов</span><span><Clock3 size={14} />Создан {compactDate(instance.createdAt)}</span></div><div className="profile-card-actions"><button className={instance.id === activeInstance?.id ? 'button button-primary' : 'button button-outline'} type="button" onClick={() => onSelect(instance.id)} disabled={!desktop}>{instance.id === activeInstance?.id ? <><Check size={15} />Активный профиль</> : <>Выбрать <ArrowRight size={15} /></>}</button><button className="profile-play" type="button" aria-label={`Запустить ${instance.name}`} title={`Запустить ${instance.name}`} disabled={!desktop} onClick={() => onPlay(instance.id)}><Play size={15} fill="currentColor" /></button></div></div>
+              <div className="profile-card-art"><div className={`profile-art-orb art-${instance.loader}`} /><span className="profile-art-stamp">{instance.source === 'modrinth' ? 'MODRINTH / PACK' : `BLOOM / ${LOADER_LABELS[instance.loader].toUpperCase()}`}</span><div className="profile-art-block"><Box size={38} strokeWidth={1.15} /></div><span className={`profile-installed ${instance.installed || instance.source === 'modrinth' && !instance.missingPackFiles ? 'installed' : ''}`}><i />{instance.source === 'modrinth' ? instance.missingPackFiles ? 'Needs manual files' : 'Pack imported' : instance.installed ? 'Installed' : 'Not installed'}</span></div>
+              <div className="profile-card-body"><div className="profile-card-title"><div><h3>{instance.name}</h3><p>{displayVersion(instance.version, versions)} <span>·</span> {LOADER_LABELS[instance.loader]}</p></div><button className="icon-button" aria-label={`Удалить профиль ${instance.name}`} type="button" onClick={() => void removeInstance(instance)} disabled={!desktop || deletingId === instance.id}><Trash2 size={15} /></button></div><div className="profile-card-stats"><span><Package size={14} />{instance.contentCount ?? 0} модов</span><span><Clock3 size={14} />Создан {compactDate(instance.createdAt)}</span>{Boolean(instance.missingPackFiles) && <span className="manual-files-note"><CircleHelp size={13} />Нужно добавить файлов: {instance.missingPackFiles}</span>}</div><div className="profile-card-actions"><button className={instance.id === activeInstance?.id ? 'button button-primary' : 'button button-outline'} type="button" onClick={() => onSelect(instance.id)} disabled={!desktop}>{instance.id === activeInstance?.id ? <><Check size={15} />Активный профиль</> : <>Выбрать <ArrowRight size={15} /></>}</button><button className="profile-play" type="button" aria-label={`Запустить ${instance.name}`} title={`Запустить ${instance.name}`} disabled={!desktop} onClick={() => onPlay(instance.id)}><Play size={15} fill="currentColor" /></button></div></div>
             </article>
           ))}
           <button className="profile-add-card" type="button" onClick={onCreate} disabled={!desktop}><span className="add-card-icon"><Plus size={21} /></span><strong>Новая сборка</strong><small>Любая версия. Любой путь.</small></button>
@@ -848,6 +879,162 @@ function InstancesPage({
       )}
       <div className="safe-data-note"><ShieldCheck size={16} /><span><strong>Сохранения в безопасности.</strong> Удаление профиля убирает только запись в лаунчере, игровые файлы автоматически не удаляются.</span></div>
       {!desktop && <div className="inline-warning"><MonitorPlay size={16} />Создание и переключение профилей записывает файлы только из установленного Electron-приложения.</div>}
+    </div>
+  );
+}
+
+function ModrinthBuildsPage({
+  versions,
+  activeInstance,
+  desktop,
+  onCreateProfile,
+  onInstallPack,
+}: {
+  versions: GameVersion[];
+  activeInstance: GameInstance | null;
+  desktop: boolean;
+  onCreateProfile: () => void;
+  onInstallPack: (project: ModrinthProject, version: string, loader: LoaderType) => Promise<void>;
+}) {
+  const [query, setQuery] = useState('');
+  const [version, setVersion] = useState(activeInstance?.version ?? '');
+  const [loader, setLoader] = useState<LoaderType>(activeInstance?.loader ?? 'fabric');
+  const [projects, setProjects] = useState<ModrinthProject[]>([]);
+  const [busy, setBusy] = useState(false);
+  const [installingId, setInstallingId] = useState('');
+  const [error, setError] = useState('');
+  const [refreshCount, setRefreshCount] = useState(0);
+
+  useEffect(() => {
+    if (!version && versions.length) setVersion(activeInstance?.version ?? versions.find((item) => item.type === 'release')?.id ?? '');
+  }, [activeInstance?.version, version, versions]);
+
+  useEffect(() => {
+    let alive = true;
+    if (!window.bloom) {
+      setProjects([]);
+      setBusy(false);
+      setError('');
+      return () => { alive = false; };
+    }
+    const timer = window.setTimeout(() => {
+      setBusy(true);
+      setError('');
+      void window.bloom?.searchModrinth({ query, type: 'modpack', version: version || undefined, loader })
+        .then((next) => { if (alive) setProjects(next); })
+        .catch((reason: unknown) => { if (alive) setError(reason instanceof Error ? reason.message : 'Не удалось найти сборки Modrinth.'); })
+        .finally(() => { if (alive) setBusy(false); });
+    }, 220);
+    return () => { alive = false; window.clearTimeout(timer); };
+  }, [loader, query, refreshCount, version]);
+
+  const install = async (project: ModrinthProject) => {
+    setInstallingId(project.project_id);
+    try { await onInstallPack(project, version, loader); }
+    finally { setInstallingId(''); }
+  };
+
+  return (
+    <div className="page modrinth-builds-page">
+      <PageHeading eyebrow="MODRINTH · ГОТОВЫЕ СБОРКИ" title="Найди свой мир" description="Установи совместимую Modrinth-сборку в отдельный игровой профиль. Bloom проверит хеши файлов перед установкой." action={<button className="button button-outline" type="button" onClick={onCreateProfile} disabled={!desktop}><Plus size={15} />Пустой профиль</button>} />
+      <div className="modpack-filter-panel">
+        <label className="catalog-search modpack-search"><Search size={15} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Название сборки или ключевые слова" /></label>
+        <label className="select-filter"><span>ВЕРСИЯ</span><select value={version} onChange={(event) => setVersion(event.target.value)}><option value="">Выбери версию</option>{versions.map((item) => <option key={item.id} value={item.id}>{item.id} · {VERSION_LABELS[item.type]}</option>)}</select><ChevronDown size={13} /></label>
+        <label className="select-filter"><span>ЗАГРУЗЧИК</span><select value={loader} onChange={(event) => setLoader(event.target.value as LoaderType)}>{Object.entries(LOADER_LABELS).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select><ChevronDown size={13} /></label>
+      </div>
+      {activeInstance && <div className="catalog-target"><span className="target-status" /><span>Сейчас выбран профиль <strong>{activeInstance.name}</strong></span><span className="target-version">Новая сборка создаст отдельный профиль и не изменит этот.</span></div>}
+      {error && <div className="catalog-error"><CircleHelp size={17} /><span>{error}</span><button type="button" onClick={() => setRefreshCount((current) => current + 1)}>Повторить</button></div>}
+      {!window.bloom ? <div className="empty-library modpack-preview-note"><div className="empty-library-icon"><Package size={22} /></div><h3>Modrinth-сборки</h3><p>Поиск и установка полного Modrinth-пакета доступны в приложении Bloom Client.</p></div> : busy ? <div className="loading-line"><span />Ищем совместимые сборки…</div> : projects.length ? (
+        <div className="modpack-grid">
+          {projects.map((project) => <article className="modpack-card" key={project.project_id}>
+            <div className="modpack-card-heading">{project.icon_url ? <img src={project.icon_url} alt="" loading="lazy" /> : <span className="modpack-placeholder"><Layers3 size={21} /></span>}<div><strong>{project.title}</strong><small>Modrinth · {project.categories.slice(0, 2).join(' · ') || 'Сборка Minecraft'}</small></div><button className="project-external" type="button" aria-label={`Открыть ${project.title} на Modrinth`} onClick={() => void openExternal(`https://modrinth.com/modpack/${project.slug}`)}><ArrowUpRight size={15} /></button></div>
+            <p>{project.description}</p>
+            <div className="modpack-card-footer"><span><Download size={13} />{formatDownloads(project.downloads)} загрузок</span><button className="button button-primary small-button" type="button" disabled={!desktop || !version || Boolean(installingId)} onClick={() => void install(project)}>{installingId === project.project_id ? <><span className="button-spinner" />Собираем…</> : <><Download size={13} />Установить</>}</button></div>
+          </article>)}
+        </div>
+      ) : <div className="empty-installed modpack-empty"><span><Layers3 size={22} /></span><strong>Сборок не найдено</strong><small>{version ? 'Попробуй другой загрузчик или поисковый запрос.' : 'Выбери версию Minecraft, чтобы увидеть совместимые сборки.'}</small></div>}
+      <div className="modpack-footnote"><ShieldCheck size={14} />Сборка устанавливается в изолированный профиль. Существующие миры и профили не меняются.</div>
+    </div>
+  );
+}
+
+function PlaySetupPage({
+  instances,
+  activeInstance,
+  versions,
+  account,
+  desktop,
+  isBusy,
+  onPlay,
+  onCreateAndPlay,
+  onOpenBuilds,
+  onOpenSettings,
+  onBack,
+}: {
+  instances: GameInstance[];
+  activeInstance: GameInstance | null;
+  versions: GameVersion[];
+  account: AccountSummary | null;
+  desktop: boolean;
+  isBusy: boolean;
+  onPlay: (instanceId: string) => void;
+  onCreateAndPlay: (input: { name: string; version: string; loader: LoaderType }) => void;
+  onOpenBuilds: () => void;
+  onOpenSettings: () => void;
+  onBack: () => void;
+}) {
+  const [mode, setMode] = useState<'saved' | 'new'>(instances.length ? 'saved' : 'new');
+  const [selectedId, setSelectedId] = useState(activeInstance?.id ?? instances[0]?.id ?? '');
+  const [name, setName] = useState('Моя сборка');
+  const [version, setVersion] = useState(activeInstance?.version ?? '');
+  const [loader, setLoader] = useState<LoaderType>(activeInstance?.loader ?? 'fabric');
+  const selectedInstance = instances.find((item) => item.id === selectedId) ?? null;
+
+  useEffect(() => {
+    if (!version && versions.length) setVersion(versions.find((item) => item.type === 'release')?.id ?? versions[0].id);
+  }, [version, versions]);
+
+  const selectInstance = (instance: GameInstance) => {
+    setSelectedId(instance.id);
+    setVersion(instance.version);
+    setLoader(instance.loader);
+  };
+
+  return (
+    <div className="page play-setup-page">
+      <div className="play-setup-heading"><button className="button button-quiet" type="button" onClick={onBack}><ArrowLeft size={15} />На главную</button><PageHeading eyebrow="BLOOM LAUNCH DECK" title="Что запускаем сегодня?" description="Выбери готовую сборку или создай новый профиль — версия и загрузчик будут настроены до запуска." /></div>
+      <div className="play-mode-switch"><button className={mode === 'saved' ? 'selected' : ''} type="button" onClick={() => setMode('saved')}><Layers3 size={15} />Мои сборки <span>{instances.length}</span></button><button className={mode === 'new' ? 'selected' : ''} type="button" onClick={() => setMode('new')}><Plus size={15} />Новая сборка</button><button className="play-mode-modrinth" type="button" onClick={onOpenBuilds}><Blocks size={15} />Modrinth <ArrowUpRight size={13} /></button></div>
+      <div className="play-setup-layout">
+        <section className="play-setup-main">
+          {mode === 'saved' && instances.length ? (
+            <>
+              <div className="setup-section-heading"><span className="setup-step-number">01</span><div><h2>Выбери сборку</h2><p>У каждого профиля своя версия, загрузчик, контент и сохранения.</p></div></div>
+              <div className="setup-build-list">{instances.map((instance) => <button key={instance.id} type="button" className={`setup-build-option ${instance.id === selectedId ? 'selected' : ''}`} onClick={() => selectInstance(instance)}><span className="setup-build-icon">{instance.source === 'modrinth' ? <Blocks size={18} /> : <Layers3 size={18} />}</span><span className="setup-build-copy"><strong>{instance.name}</strong><small>{instance.source === 'modrinth' ? 'Modrinth-сборка' : 'Профиль Bloom'} · {displayVersion(instance.version, versions)} · {LOADER_LABELS[instance.loader]}</small></span><span className={`setup-build-state ${instance.installed || instance.source === 'modrinth' && !instance.missingPackFiles ? 'ready' : ''}`}><i />{instance.source === 'modrinth' ? instance.missingPackFiles ? `${instance.missingPackFiles} файлов вручную` : 'Пакет загружен' : instance.installed ? 'Готова' : 'Установит при первом запуске'}</span><span className={`setup-radio ${instance.id === selectedId ? 'checked' : ''}`} /></button>)}</div>
+              {selectedInstance && <div className="setup-version-summary"><span><small>ВЕРСИЯ</small><strong>{displayVersion(selectedInstance.version, versions)}</strong></span><span><small>ЗАГРУЗЧИК</small><strong>{LOADER_LABELS[selectedInstance.loader]}{selectedInstance.loaderVersion ? ` · ${selectedInstance.loaderVersion}` : ''}</strong></span><span><small>ТИП СБОРКИ</small><strong>{selectedInstance.source === 'modrinth' ? 'Modrinth' : 'Профиль Bloom'}</strong></span></div>}
+            </>
+          ) : (
+            <>
+              <div className="setup-section-heading"><span className="setup-step-number">01</span><div><h2>Версия Minecraft</h2><p>Доступны релизы, снапшоты, Beta и Alpha из официального манифеста.</p></div></div>
+              <div className="setup-version-picker"><VersionPicker versions={versions} value={version} onChange={setVersion} /></div>
+              <div className="setup-section-heading setup-loader-heading"><span className="setup-step-number">02</span><div><h2>Загрузчик</h2><p>Выбирай подходящий для модов или оставь чистую Vanilla.</p></div></div>
+              <div className="setup-loader-grid">{Object.entries(LOADER_LABELS).map(([key, label]) => <button className={`setup-loader-option ${loader === key ? 'selected' : ''}`} type="button" key={key} onClick={() => setLoader(key as LoaderType)}><span className={`loader-mark loader-${key}`}>{key === 'vanilla' ? 'V' : key.slice(0, 1).toUpperCase()}</span><span><strong>{label}</strong><small>{key === 'vanilla' ? 'Без мод-загрузчика' : 'Совместимые моды'}</small></span>{loader === key && <Check size={15} />}</button>)}</div>
+              <label className="setup-name-label">03 · Название новой сборки<input className="text-input" value={name} maxLength={36} onChange={(event) => setName(event.target.value)} placeholder="Например, Cherry SMP" /></label>
+            </>
+          )}
+          {!instances.length && mode === 'saved' && <div className="empty-installed modpack-empty"><span><Layers3 size={22} /></span><strong>Пока нет готовых сборок</strong><small>Создай профиль или выбери готовый Modrinth-пакет.</small><button className="button button-outline" type="button" onClick={() => setMode('new')}><Plus size={14} />Создать первую</button></div>}
+        </section>
+        <aside className="play-setup-aside">
+          <div className="setup-campfire-mark"><span>✦</span><i /><i /><i /></div>
+          <span className="section-label">ПЕРЕД СТАРТОМ</span>
+          <h2>{mode === 'new' ? 'Собери новый мир' : selectedInstance?.name ?? 'Выбери профиль'}</h2>
+          <p>{mode === 'new' ? 'Bloom создаст изолированный профиль с выбранными параметрами, не затрагивая другие миры.' : selectedInstance ? 'Версия и загрузчик закреплены за выбранной сборкой.' : 'Выбери профиль слева или создай новый.'}</p>
+          <div className="setup-summary-lines"><div><span>Версия</span><strong>{mode === 'new' ? displayVersion(version, versions) : selectedInstance ? displayVersion(selectedInstance.version, versions) : '—'}</strong></div><div><span>Загрузчик</span><strong>{mode === 'new' ? LOADER_LABELS[loader] : selectedInstance ? LOADER_LABELS[selectedInstance.loader] : '—'}</strong></div><div><span>Аккаунт</span><strong>{account ? account.name : 'Нужно войти'}</strong></div></div>
+          {!account && <button className="setup-account-link" type="button" onClick={onOpenSettings}><LockKeyhole size={14} />Войти через Microsoft / Ely.by</button>}
+          {mode === 'new' ? <button className="button button-primary setup-launch-button" type="button" disabled={!desktop || isBusy || !version || !name.trim()} onClick={() => onCreateAndPlay({ name: name.trim(), version, loader })}>{isBusy ? <><span className="button-spinner" />Создаём профиль…</> : <><Play size={16} fill="currentColor" />Создать и играть<ArrowRight size={15} /></>}</button> : <button className="button button-primary setup-launch-button" type="button" disabled={!desktop || !selectedInstance || isBusy} onClick={() => selectedInstance && onPlay(selectedInstance.id)}>{isBusy ? <><span className="button-spinner" />Готовим запуск…</> : <><Play size={16} fill="currentColor" />Играть<ArrowRight size={15} /></>}</button>}
+          {!desktop && <small className="setup-desktop-note">Создание и запуск доступны в установленной Windows-версии Bloom.</small>}
+          <button className="setup-browse-packs" type="button" onClick={onOpenBuilds}><Blocks size={15} /><span><strong>Хочешь готовую сборку?</strong><small>Открыть каталог Modrinth</small></span><ChevronRight size={15} /></button>
+        </aside>
+      </div>
     </div>
   );
 }
@@ -1189,6 +1376,8 @@ function InfoIcon() { return <CircleHelp size={14} />; }
 function SettingsPage({
   versions,
   bootstrap,
+  onOpenHud,
+  onOpenSkins,
   accounts,
   activeAccount,
   desktop,
@@ -1205,6 +1394,8 @@ function SettingsPage({
 }: {
   versions: GameVersion[];
   bootstrap: BootstrapState | null;
+  onOpenHud: () => void;
+  onOpenSkins: () => void;
   accounts: AccountSummary[];
   activeAccount: AccountSummary | null;
   desktop: boolean;
@@ -1222,13 +1413,14 @@ function SettingsPage({
   return (
     <div className="page">
       <PageHeading eyebrow="CLIENT SETTINGS" title="Параметры лаунчера" description="Управляй входом, Java и памятью, выделяемой выбранному игровому профилю." />
+      <div className="settings-feature-links"><button type="button" onClick={onOpenHud}><span className="settings-feature-icon"><Gamepad2 size={17} /></span><span><strong>HUD и производительность</strong><small>Кейстроки, CPS, дальность прорисовки, FPS</small></span><ArrowRight size={15} /></button><button type="button" onClick={onOpenSkins}><span className="settings-feature-icon settings-skin-icon"><Shirt size={17} /></span><span><strong>3D-скин игрока</strong><small>Preview с вращением и управление образом</small></span><ArrowRight size={15} /></button></div>
       <div className="settings-layout">
         <section className="settings-card"><div className="settings-card-heading"><div><span className="section-label">АККАУНТЫ</span><h2>Подключённые аккаунты</h2><p>Сессии отделены от каталогов игры; режим хранения зависит от доступной защиты ОС.</p></div><span className="settings-heading-icon account-icon"><UsersRound size={18} /></span></div>{accounts.length ? <div className="account-list">{accounts.map((account) => <div className={`account-list-row ${activeAccount?.id === account.id ? 'account-row-current' : ''}`} key={account.id}><Avatar account={account} /><span className="account-list-name"><strong>{account.name}</strong><small>{providerLabel(account.provider)}</small></span>{activeAccount?.id === account.id ? <span className="current-account-tag"><Check size={12} />Активен</span> : <button className="button button-outline account-switch" type="button" onClick={() => onSwitchAccount(account)}>Выбрать</button>}<button className="icon-button icon-danger" type="button" aria-label={`Удалить аккаунт ${account.name}`} onClick={() => { if (window.confirm(`Удалить ${account.name} с этого устройства?`)) void onRemoveAccount(account.id).catch((error) => onNotify(error instanceof Error ? error.message : 'Не удалось удалить аккаунт.')); }}><Trash2 size={14} /></button></div>)}</div> : <div className="empty-account"><UserRound size={18} /><span>Нет сохранённых игровых аккаунтов.</span></div>}<button className="button button-outline add-account-button" type="button" onClick={onOpenAuth}><Plus size={15} />Добавить аккаунт</button>{desktop && <div className="encrypted-note"><LockKeyhole size={14} />{bootstrap?.secureStorageAvailable ? 'Токены зашифрованы через системный safeStorage.' : 'Системное шифрование недоступно. Вход останется только до закрытия приложения.'}</div>}</section>
         <section className="settings-card"><div className="settings-card-heading"><div><span className="section-label">GAME RUNTIME</span><h2>Java и память</h2><p>Bloom скачает подходящую Java автоматически, если не выбран свой путь.</p></div><span className="settings-heading-icon runtime-icon"><Cpu size={18} /></span></div><div className="runtime-row"><span className="runtime-status"><Check size={15} /></span><div><strong>Java Runtime</strong><small>{javaPath ? javaPath.split(/[\\/]/).pop() : 'Автоматическая установка подходящей версии'}</small></div><button className="button button-outline small-button" type="button" onClick={onChooseJava} disabled={!desktop}>Выбрать файл</button></div><button className="reset-java" type="button" disabled={!desktop || !javaPath} onClick={() => { onResetJava(); onNotify('Будет использоваться автоматическая Java.'); }}>Вернуть автоустановку</button><div className="memory-setting"><div className="memory-label"><span><strong>Память для Minecraft</strong><small>Система: {bootstrap?.totalMemoryMb ? `${(bootstrap.totalMemoryMb / 1024).toFixed(1)} ГБ` : 'определяется при запуске'}</small></span><strong className="memory-value">{memoryGb} ГБ</strong></div><input type="range" min="2" max={Math.max(2, maxMemoryGb)} step="1" value={Math.min(memoryGb, maxMemoryGb)} onChange={(event) => onMemoryChange(Number(event.target.value))} /><div className="memory-range-labels"><span>2 ГБ</span><span>Оставляем системе минимум 2 ГБ</span><span>{Math.max(2, maxMemoryGb)} ГБ</span></div></div></section>
         <section className="settings-card settings-data-card"><div className="settings-card-heading"><div><span className="section-label">LOCAL STORAGE</span><h2>Данные и файлы</h2><p>Игровые каталоги хранятся раздельно от токенов входа.</p></div><span className="settings-heading-icon data-icon"><HardDriveDownload size={18} /></span></div><div className="path-row"><span className="path-type">APP DATA</span><code>{bootstrap?.dataDirectory ?? 'Работает только в установленном приложении'}</code><button className="copy-path" type="button" onClick={() => { if (bootstrap?.dataDirectory) void navigator.clipboard?.writeText(bootstrap.dataDirectory); onNotify('Путь скопирован.'); }} disabled={!desktop}>Копировать</button></div><div className="settings-bullet"><ShieldCheck size={15} /><span>Пароль Ely.by не записывается на диск. Сохраняется только сессионный токен, если ОС предоставляет безопасное хранилище.</span></div><div className="settings-bullet"><Box size={15} /><span>Удаление профиля в Bloom сохраняет игровые файлы и миры. Очистку можно сделать вручную.</span></div></section>
         <section className="settings-card settings-versions-card"><div className="settings-card-heading"><div><span className="section-label">SUPPORTED VERSIONS</span><h2>Полная история Minecraft</h2><p>Релизы, снапшоты, Beta и Alpha из официального version manifest.</p></div><span className="settings-heading-icon versions-icon"><Clock3 size={18} /></span></div><div className="version-count-line"><strong>{versions.length ? versions.length.toLocaleString('ru-RU') : '—'}</strong><span>официальных версий доступно</span></div><div className="version-channel-tags"><span>Release</span><span>Snapshot</span><span>Old Beta</span><span>Old Alpha</span></div><div className="catalog-mini-link"><span>Фильтры Modrinth используют версию профиля и загрузчик.</span><BadgeCheck size={15} /></div></section>
       </div>
-      <div className="settings-footer"><span>Bloom Client · desktop {bootstrap?.appVersion ?? '0.5.2'}</span><button type="button" onClick={() => openExternal('https://github.com/zxcwmd/zxc')}>О проекте <ArrowUpRight size={13} /></button></div>
+      <div className="settings-footer"><span>Bloom Client · desktop {bootstrap?.appVersion ?? '0.5.3'}</span><button type="button" onClick={() => openExternal('https://github.com/zxcwmd/zxc')}>О проекте <ArrowUpRight size={13} /></button></div>
     </div>
   );
 }

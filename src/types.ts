@@ -1,5 +1,6 @@
 export type LoaderType = 'vanilla' | 'fabric' | 'quilt' | 'forge' | 'neoforge';
 export type ContentType = 'mod' | 'resourcepack';
+export type ModrinthProjectType = ContentType | 'modpack';
 export type VersionType = 'release' | 'snapshot' | 'old_beta' | 'old_alpha';
 
 export interface GameVersion {
@@ -18,6 +19,11 @@ export interface GameInstance {
   createdAt: string;
   installed?: boolean;
   contentCount?: number;
+  source?: 'profile' | 'modrinth';
+  modpackProjectId?: string;
+  modpackProjectTitle?: string;
+  modpackVersionId?: string;
+  missingPackFiles?: number;
 }
 
 export interface AccountSummary {
@@ -59,7 +65,7 @@ export interface ModrinthProject {
   follows: number;
   categories: string[];
   latest_version: string;
-  project_type: 'mod' | 'resourcepack' | string;
+  project_type: ModrinthProjectType | string;
 }
 
 export interface InstalledFile {
@@ -89,12 +95,13 @@ export interface BloomBridge {
   onLauncherEvent(callback: (event: LauncherEvent) => void): () => void;
   searchModrinth(input: {
     query: string;
-    type: ContentType;
+    type: ModrinthProjectType;
     version?: string;
     loader?: LoaderType | 'all';
     category?: string;
   }): Promise<ModrinthProject[]>;
   installModrinth(input: { projectId: string; instanceId: string; type: ContentType }): Promise<{ installed: string[] }>;
+  installModrinthPack(input: { projectId: string; name?: string; gameVersion?: string; loader?: LoaderType }): Promise<GameInstance>;
   getInstalledContent(input: { instanceId: string; type: ContentType }): Promise<InstalledFile[]>;
   importLocalContent(input: { instanceId: string; type: ContentType }): Promise<{ imported: string[] }>;
   removeInstalledContent(input: { instanceId: string; type: ContentType; fileName: string }): Promise<void>;
