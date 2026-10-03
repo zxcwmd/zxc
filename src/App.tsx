@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ChangeEvent, FormEvent, ReactNode } from 'react';
 import type { SkinViewer } from 'skinview3d';
+import type { Group as ThreeGroup, Material as ThreeMaterial, Mesh as ThreeMesh } from 'three';
 import {
   Activity,
   ArrowLeft,
@@ -71,6 +72,7 @@ type PageId = 'home' | 'catalog' | 'builds' | 'playSetup' | 'hud' | 'skins' | 's
 type ModalId = 'auth' | 'instance' | 'launch' | null;
 type VersionFilter = 'all' | VersionType;
 type BuildsTab = 'profiles' | 'modrinth';
+type HomeScene = 'grove' | 'studio';
 
 const LOADER_LABELS: Record<LoaderType, string> = {
   vanilla: 'Vanilla',
@@ -183,7 +185,7 @@ function makeDemoSkin(): HTMLCanvasElement {
   return canvas;
 }
 
-function SkinPreview({ skin, cape, name, className = '', pose = 'standing' }: { skin: string | null; cape?: string | null; name?: string; className?: string; pose?: 'standing' | 'seated' }) {
+function SkinPreview({ skin, cape, name, className = '', pose = 'standing' }: { skin: string | null; cape?: string | null; name?: string; className?: string; pose?: 'standing' | 'seated' | 'hero' }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
@@ -193,6 +195,7 @@ function SkinPreview({ skin, cape, name, className = '', pose = 'standing' }: { 
     let cancelled = false;
     let observer: ResizeObserver | null = null;
     let viewer: SkinViewer | null = null;
+    let weaponRoot: ThreeGroup | null = null;
     let dragging = false;
     let activePointerId: number | null = null;
     let lastPointerX = 0;
@@ -211,7 +214,10 @@ function SkinPreview({ skin, cape, name, className = '', pose = 'standing' }: { 
     let lookYaw = 0;
     let lookPitch = 0;
     const seated = pose === 'seated';
-    const baseYaw = -0.28;
+    const hero = pose === 'hero';
+    const interactive = seated || hero;
+    const baseYaw = hero ? 2.2 : -0.28;
+    const headBaseYaw = hero ? -1.5 : 0;
     const returnDuration = 1050;
     const easeInOut = (value: number) => {
       const t = Math.max(0, Math.min(1, value));
@@ -237,7 +243,7 @@ function SkinPreview({ skin, cape, name, className = '', pose = 'standing' }: { 
     };
 
     const handlePointerDown = (event: PointerEvent) => {
-      if (!seated || !event.isPrimary || (event.pointerType === 'mouse' && event.button !== 0)) return;
+      if (!interactive || !event.isPrimary || (event.pointerType === 'mouse' && event.button !== 0)) return;
       const now = performance.now();
       manualYaw = currentManualYaw(now);
       returnAt = 0;
@@ -272,9 +278,9 @@ function SkinPreview({ skin, cape, name, className = '', pose = 'standing' }: { 
       canvas.classList.remove('skin-dragging');
       event.preventDefault();
     };
-    const handleContextMenu = (event: MouseEvent) => { if (seated) event.preventDefault(); };
+    const handleContextMenu = (event: MouseEvent) => { if (interactive) event.preventDefault(); };
 
-    void import('skinview3d').then(({ SkinViewer, FunctionAnimation }) => {
+    void Promise.all([import('skinview3d'), import('three')]).then(([{ SkinViewer, FunctionAnimation }, THREE]) => {
       if (cancelled) return;
       const contextAttributes: WebGLContextAttributes = { alpha: true, premultipliedAlpha: true, antialias: true };
       const context = canvas.getContext('webgl2', contextAttributes) ?? canvas.getContext('webgl', contextAttributes);
@@ -282,13 +288,11 @@ function SkinPreview({ skin, cape, name, className = '', pose = 'standing' }: { 
 
       const demo = skin ? null : makeDemoSkin();
       const bounds = frame.getBoundingClientRect();
-      const seatedAnimation = seated
+      const sceneAnimation = interactive
         ? new FunctionAnimation((player, progress) => {
             const now = performance.now();
             const breath = Math.sin(progress * 1.65) * 0.5 + 0.5;
-            const lean = -0.38;
-            const leanCos = Math.cos(lean);
-            const leanSin = Math.sin(lean);
+            const breathing = Math.sin(progress * 1.65);
             const joints = player.skin;
             const yaw = currentManualYaw(now);
 
@@ -305,26 +309,41 @@ function SkinPreview({ skin, cape, name, className = '', pose = 'standing' }: { 
             lookYaw = lookYawFrom + (lookYawTo - lookYawFrom) * lookProgress;
             lookPitch = lookPitchFrom + (lookPitchTo - lookPitchFrom) * lookProgress;
             const gazeBlend = dragging || returnAt || returnStartedAt ? 0 : 1;
-            const breathing = Math.sin(progress * 1.65);
 
-            joints.body.rotation.set(lean + breathing * 0.018, 0, Math.sin(progress * 0.55) * 0.009);
-            joints.body.position.y = -6 + breath * 0.18;
-            joints.head.position.set(0, -6 + 6 * leanCos + breath * 0.14, 6 * leanSin);
-            joints.head.rotation.set(0.06 + lookPitch * gazeBlend + breathing * 0.018, lookYaw * gazeBlend, 0);
-
-            joints.rightArm.position.set(-5, -6 + 4 * leanCos, 4 * leanSin);
-            joints.leftArm.position.set(5, -6 + 4 * leanCos, 4 * leanSin);
-            joints.rightArm.rotation.set(0.66 + breath * 0.018, -0.03, -0.08);
-            joints.leftArm.rotation.set(0.66 + breath * 0.018, 0.03, 0.08);
-
-            const hipY = -6 - 6 * leanCos;
-            const hipZ = -6 * leanSin;
-            joints.rightLeg.position.set(-2.1, hipY, hipZ);
-            joints.leftLeg.position.set(2.1, hipY, hipZ);
-            joints.rightLeg.rotation.set(-Math.PI / 2 + breathing * 0.006, 0, -0.12);
-            joints.leftLeg.rotation.set(-Math.PI / 2 - breathing * 0.006, 0, 0.12);
-
-            player.position.y = -2 + breath * 0.12;
+            if (seated) {
+              const lean = -0.38;
+              const leanCos = Math.cos(lean);
+              const leanSin = Math.sin(lean);
+              joints.body.rotation.set(lean + breathing * 0.018, 0, Math.sin(progress * 0.55) * 0.009);
+              joints.body.position.y = -6 + breath * 0.18;
+              joints.head.position.set(0, -6 + 6 * leanCos + breath * 0.14, 6 * leanSin);
+              joints.head.rotation.set(0.06 + lookPitch * gazeBlend + breathing * 0.018, lookYaw * gazeBlend, 0);
+              joints.rightArm.position.set(-5, -6 + 4 * leanCos, 4 * leanSin);
+              joints.leftArm.position.set(5, -6 + 4 * leanCos, 4 * leanSin);
+              joints.rightArm.rotation.set(0.66 + breath * 0.018, -0.03, -0.08);
+              joints.leftArm.rotation.set(0.66 + breath * 0.018, 0.03, 0.08);
+              const hipY = -6 - 6 * leanCos;
+              const hipZ = -6 * leanSin;
+              joints.rightLeg.position.set(-2.1, hipY, hipZ);
+              joints.leftLeg.position.set(2.1, hipY, hipZ);
+              joints.rightLeg.rotation.set(-Math.PI / 2 + breathing * 0.006, 0, -0.12);
+              joints.leftLeg.rotation.set(-Math.PI / 2 - breathing * 0.006, 0, 0.12);
+              player.position.y = -2 + breath * 0.12;
+            } else if (hero) {
+              joints.body.rotation.set(0.035 + breathing * 0.012, 0, Math.sin(progress * 0.5) * 0.006);
+              joints.body.position.y = -6 + breath * 0.08;
+              joints.head.position.set(0, breath * 0.08, 0);
+              joints.head.rotation.set(0.025 + lookPitch * gazeBlend + breathing * 0.012, headBaseYaw + lookYaw * gazeBlend, 0);
+              joints.rightArm.position.set(-5, -2, 0);
+              joints.leftArm.position.set(5, -2, 0);
+              joints.rightArm.rotation.set(0.45 + breath * 0.015, 0.02, -0.4);
+              joints.leftArm.rotation.set(0.08 + breathing * 0.01, 0, 0.1);
+              joints.rightLeg.position.set(-2.7, -12, 0.35);
+              joints.leftLeg.position.set(2.7, -12, -0.1);
+              joints.rightLeg.rotation.set(0.025 + breathing * 0.004, 0, -0.11);
+              joints.leftLeg.rotation.set(-0.02, 0, 0.11);
+              player.position.y = breath * 0.08;
+            }
             player.rotation.y = yaw;
           })
         : undefined;
@@ -335,23 +354,62 @@ function SkinPreview({ skin, cape, name, className = '', pose = 'standing' }: { 
         height: Math.max(200, Math.floor(bounds.height)),
         skin: skin ?? demo ?? undefined,
         cape: cape ?? undefined,
-        enableControls: !seated,
-        fov: seated ? 38 : 36,
-        zoom: seated ? 0.62 : 0.76,
+        enableControls: !interactive,
+        fov: hero ? 44 : seated ? 38 : 36,
+        zoom: hero ? 0.9 : seated ? 0.62 : 0.76,
         pixelRatio: 1,
-        nameTag: seated ? undefined : name ?? undefined,
-        animation: seatedAnimation,
+        nameTag: interactive ? undefined : name ?? undefined,
+        animation: sceneAnimation,
       });
       viewer.controls.enableZoom = false;
       viewer.controls.enablePan = false;
-      viewer.autoRotate = !seated;
+      viewer.autoRotate = !interactive;
       viewer.autoRotateSpeed = 0.62;
-      if (seated) {
+      if (interactive) {
         viewer.playerWrapper.rotation.y = baseYaw;
-        viewer.controls.target.set(0, 1.5, 0);
-        viewer.camera.position.set(8, 14, 80);
+        if (hero) {
+          viewer.controls.target.set(0, -10, 0);
+          viewer.camera.position.set(6, -16, 66);
+        } else {
+          viewer.controls.target.set(0, 1.5, 0);
+          viewer.camera.position.set(8, 14, 80);
+        }
         viewer.camera.lookAt(viewer.controls.target);
         viewer.controls.update();
+        if (hero) {
+          const sword = new THREE.Group();
+          const bladeMaterial = new THREE.MeshStandardMaterial({ color: 0x302a39, metalness: 0.76, roughness: 0.24, emissive: 0x241433, emissiveIntensity: 0.75 });
+          const edgeMaterial = new THREE.MeshStandardMaterial({ color: 0x8d80a2, metalness: 0.82, roughness: 0.2, emissive: 0x39275b, emissiveIntensity: 0.6 });
+          const guardMaterial = new THREE.MeshStandardMaterial({ color: 0x504257, metalness: 0.8, roughness: 0.22, emissive: 0x28153e, emissiveIntensity: 0.48 });
+          const gripMaterial = new THREE.MeshStandardMaterial({ color: 0x211e2b, metalness: 0.3, roughness: 0.55 });
+          const glowMaterial = new THREE.MeshBasicMaterial({ color: 0xb79aff });
+          const addBlock = (width: number, height: number, depth: number, x: number, y: number, z: number, material: ThreeMaterial) => {
+            const mesh = new THREE.Mesh(new THREE.BoxGeometry(width, height, depth), material);
+            mesh.position.set(x, y, z);
+            sword.add(mesh);
+          };
+          addBlock(4.2, 9, 1.35, 0, 5.5, 0, bladeMaterial);
+          addBlock(3.4, 5, 1.25, 0, 12.5, 0, bladeMaterial);
+          addBlock(2.5, 3.5, 1.1, 0, 16.75, 0, bladeMaterial);
+          addBlock(1.6, 2.5, 1, 0, 19.75, 0, bladeMaterial);
+          addBlock(0.8, 1.5, 0.9, 0, 21.75, 0, bladeMaterial);
+          addBlock(0.55, 11.5, 0.08, 0, 10, 0.72, glowMaterial);
+          addBlock(0.35, 9.5, 0.08, -1.65, 6.5, 0.72, edgeMaterial);
+          addBlock(0.35, 9.5, 0.08, 1.65, 6.5, 0.72, edgeMaterial);
+          addBlock(8.4, 1.5, 2.4, 0, 0, 0, guardMaterial);
+          addBlock(2.6, 1.4, 2.6, -3.4, 0.25, 0, edgeMaterial);
+          addBlock(2.6, 1.4, 2.6, 3.4, 0.25, 0, edgeMaterial);
+          addBlock(2.6, 5.3, 2.6, 0, -3.7, 0, gripMaterial);
+          addBlock(3.1, 0.9, 3.1, 0, -2.4, 0, guardMaterial);
+          addBlock(3.1, 0.9, 3.1, 0, -5.1, 0, guardMaterial);
+          addBlock(3.5, 2.8, 3.5, 0, -7.4, 0, guardMaterial);
+          addBlock(1.35, 1.35, 0.7, 0, -0.05, 1.45, glowMaterial);
+          sword.position.set(0, -9.1, 0);
+          sword.rotation.set(2.2, -2.2, 0.1);
+          sword.scale.setScalar(1.18);
+          viewer.playerObject.skin.rightArm.add(sword);
+          weaponRoot = sword;
+        }
         frame.classList.add('skin-interactive');
         canvas.addEventListener('pointerdown', handlePointerDown);
         canvas.addEventListener('pointermove', handlePointerMove);
@@ -369,7 +427,7 @@ function SkinPreview({ skin, cape, name, className = '', pose = 'standing' }: { 
     return () => {
       cancelled = true;
       observer?.disconnect();
-      if (seated) {
+      if (interactive) {
         canvas.removeEventListener('pointerdown', handlePointerDown);
         canvas.removeEventListener('pointermove', handlePointerMove);
         canvas.removeEventListener('pointerup', finishPointer);
@@ -378,6 +436,18 @@ function SkinPreview({ skin, cape, name, className = '', pose = 'standing' }: { 
         canvas.removeEventListener('contextmenu', handleContextMenu);
         frame.classList.remove('skin-interactive');
         canvas.classList.remove('skin-dragging');
+      }
+      if (weaponRoot) {
+        weaponRoot.removeFromParent();
+        const materials = new Set<ThreeMaterial>();
+        weaponRoot.traverse((object) => {
+          const mesh = object as ThreeMesh;
+          if (!mesh.isMesh) return;
+          mesh.geometry.dispose();
+          for (const material of Array.isArray(mesh.material) ? mesh.material : [mesh.material]) materials.add(material);
+        });
+        materials.forEach((material) => material.dispose());
+        weaponRoot = null;
       }
       viewer?.dispose();
     };
@@ -399,6 +469,7 @@ function BrandGlyph() {
 
 function App() {
   const [activePage, setActivePage] = useState<PageId>('home');
+  const [homeScene, setHomeScene] = useState<HomeScene>(() => readStorage<HomeScene>('bloom-home-scene', 'grove') === 'studio' ? 'studio' : 'grove');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [catalogType, setCatalogType] = useState<ContentType>('mod');
   const [buildsTab, setBuildsTab] = useState<BuildsTab>('profiles');
@@ -486,6 +557,9 @@ function App() {
     };
   }, [loadVersions, notify, refreshBootstrap]);
 
+  useEffect(() => {
+    localStorage.setItem('bloom-home-scene', JSON.stringify(homeScene));
+  }, [homeScene]);
   useEffect(() => {
     localStorage.setItem('bloom-performance', JSON.stringify(performance));
   }, [performance]);
@@ -688,6 +762,8 @@ function App() {
             skin={previewSkin ?? skin.skinDataUrl}
             cape={skin.capeDataUrl}
             desktop={desktop}
+            scene={homeScene}
+            onSceneChange={setHomeScene}
             onPlay={() => changePage('playSetup')}
             onOpenAuth={() => setModal('auth')}
             onOpenInstances={() => openBuilds('profiles')}
@@ -851,7 +927,7 @@ function App() {
           </div>
         </header>
 
-        {!desktop && <div className="preview-banner"><MonitorPlay size={15} /><span>Это интерактивный preview. Авторизация, запись файлов и запуск доступны в установленном приложении.</span><button type="button" onClick={() => void openExternal('https://github.com/zxcwmd/zxc/releases/tag/v0.5.7-preview.1')}>Скачать приложение</button></div>}
+        {!desktop && <div className="preview-banner"><MonitorPlay size={15} /><span>Это интерактивный preview. Авторизация, запись файлов и запуск доступны в установленном приложении.</span><button type="button" onClick={() => void openExternal('https://github.com/zxcwmd/zxc/releases/tag/v0.5.8-preview.1')}>Скачать приложение</button></div>}
         <div className="content-scroll">
           {loadingApp && <div className="loading-line"><span />Подготавливаем библиотеку Bloom…</div>}
           {versionsError && <div className="inline-warning"><CircleHelp size={16} /><span>Список версий Minecraft временно недоступен. Проверьте подключение к интернету и повторите попытку.</span><button type="button" onClick={() => void loadVersions()}>Повторить</button></div>}
@@ -897,6 +973,8 @@ function HomePage({
   skin,
   cape,
   desktop,
+  scene,
+  onSceneChange,
   onPlay,
   onOpenAuth,
   onOpenInstances,
@@ -909,6 +987,8 @@ function HomePage({
   skin: string | null;
   cape: string | null;
   desktop: boolean;
+  scene: HomeScene;
+  onSceneChange: (scene: HomeScene) => void;
   onPlay: () => void;
   onOpenAuth: () => void;
   onOpenInstances: () => void;
@@ -917,15 +997,19 @@ function HomePage({
 }) {
   const latestRelease = versions.find((version) => version.type === 'release')?.id ?? '—';
   return (
-    <div className="home-scene-page">
+    <div className={`home-scene-page scene-${scene}`}>
       <section className="home-scene-card">
         <div className="home-scene-shade" aria-hidden="true" />
         <div className="home-scene-petals" aria-hidden="true" />
         <header className="home-scene-header">
           <div className="home-scene-brand">
-            <BrandGlyph /><span><strong>Bloom Client</strong><small>CHERRY GROVE EDITION</small></span>
+            <BrandGlyph /><span><strong>Bloom Client</strong><small>{scene === 'grove' ? 'CHERRY GROVE EDITION' : 'STUDIO EDITION'}</small></span>
           </div>
-          <div className="home-scene-location"><span className="hero-live" /> CHERRY GROVE <i /> MAIN MENU</div>
+          <div className="home-scene-location scene-switch" role="group" aria-label="Выбор сцены главного меню">
+            <button type="button" className={scene === 'grove' ? 'selected' : ''} aria-pressed={scene === 'grove'} onClick={() => onSceneChange('grove')}>CHERRY GROVE</button>
+            <i />
+            <button type="button" className={scene === 'studio' ? 'selected' : ''} aria-pressed={scene === 'studio'} onClick={() => onSceneChange('studio')}>STUDIO</button>
+          </div>
           <button className="home-scene-account" type="button" onClick={account ? onOpenSettings : onOpenAuth}>
             <Avatar account={account} size="small" /><span><strong>{account?.name ?? 'Подключить аккаунт'}</strong><small>{account ? providerLabel(account.provider) : 'Microsoft · Ely.by'}</small></span><ChevronDown size={15} />
           </button>
@@ -933,8 +1017,8 @@ function HomePage({
 
         <div className="home-scene-title"><span className="scene-overline"><Sparkles size={13} /> ТВОЁ МЕСТО В МИРЕ MINECRAFT</span><h1>Bloom <em>Client</em></h1><p>Собери своё приключение.</p></div>
 
-        <div className="home-scene-world-chip"><span className="pulse-point" />ВИШНЁВАЯ ОПУШКА <i /> v{latestRelease}</div>
-        <div className="home-scene-player"><div className="scene-player-glow" /><SkinPreview skin={skin} cape={cape} name={account?.name ?? 'Bloom Explorer'} className="home-scene-skin" pose="seated" /><div className="scene-player-caption"><span>{account ? 'ИГРОК У КОСТРА' : 'DEMO PLAYER'}</span><strong>{account?.name ?? 'Bloom Explorer'}</strong><small>Потяни, чтобы осмотреть</small></div></div>
+        {scene === 'grove' && <div className="home-scene-world-chip"><span className="pulse-point" />ВИШНЁВАЯ ОПУШКА <i /> v{latestRelease}</div>}
+        <div className="home-scene-player"><div className="scene-player-glow" /><SkinPreview skin={skin} cape={cape} name={account?.name ?? 'Bloom Explorer'} className="home-scene-skin" pose={scene === 'studio' ? 'hero' : 'seated'} /><div className="scene-player-caption"><span>{scene === 'studio' ? 'HERO STANCE' : account ? 'ИГРОК У КОСТРА' : 'DEMO PLAYER'}</span><strong>{account?.name ?? 'Bloom Explorer'}</strong><small>Потяни, чтобы осмотреть</small></div></div>
         <div className="home-scene-caption"><span>ТИШИНА. ТЁПЛЫЙ СВЕТ. И ЦЕЛЫЙ МИР ВПЕРЕДИ.</span><span>JAVA EDITION · {desktop ? 'DESKTOP CLIENT' : 'WEB PREVIEW'}</span></div>
 
         <nav className="home-round-nav" aria-label="Разделы Bloom Client">
@@ -1557,7 +1641,7 @@ function SettingsPage({
         <section className="settings-card settings-data-card"><div className="settings-card-heading"><div><span className="section-label">LOCAL STORAGE</span><h2>Данные и файлы</h2><p>Игровые каталоги хранятся раздельно от токенов входа.</p></div><span className="settings-heading-icon data-icon"><HardDriveDownload size={18} /></span></div><div className="path-row"><span className="path-type">APP DATA</span><code>{bootstrap?.dataDirectory ?? 'Работает только в установленном приложении'}</code><button className="copy-path" type="button" onClick={() => { if (bootstrap?.dataDirectory) void navigator.clipboard?.writeText(bootstrap.dataDirectory); onNotify('Путь скопирован.'); }} disabled={!desktop}>Копировать</button></div><div className="settings-bullet"><ShieldCheck size={15} /><span>Пароль Ely.by не записывается на диск. Сохраняется только сессионный токен, если ОС предоставляет безопасное хранилище.</span></div><div className="settings-bullet"><Box size={15} /><span>Удаление профиля в Bloom сохраняет игровые файлы и миры. Очистку можно сделать вручную.</span></div></section>
         <section className="settings-card settings-versions-card"><div className="settings-card-heading"><div><span className="section-label">SUPPORTED VERSIONS</span><h2>Полная история Minecraft</h2><p>Релизы, снапшоты, Beta и Alpha из официального version manifest.</p></div><span className="settings-heading-icon versions-icon"><Clock3 size={18} /></span></div><div className="version-count-line"><strong>{versions.length ? versions.length.toLocaleString('ru-RU') : '—'}</strong><span>официальных версий доступно</span></div><div className="version-channel-tags"><span>Release</span><span>Snapshot</span><span>Old Beta</span><span>Old Alpha</span></div><div className="catalog-mini-link"><span>Фильтры Modrinth используют версию профиля и загрузчик.</span><BadgeCheck size={15} /></div></section>
       </div>
-      <div className="settings-footer"><span>Bloom Client · desktop {bootstrap?.appVersion ?? '0.5.7'}</span><button type="button" onClick={() => openExternal('https://github.com/zxcwmd/zxc')}>О проекте <ArrowUpRight size={13} /></button></div>
+      <div className="settings-footer"><span>Bloom Client · desktop {bootstrap?.appVersion ?? '0.5.8'}</span><button type="button" onClick={() => openExternal('https://github.com/zxcwmd/zxc')}>О проекте <ArrowUpRight size={13} /></button></div>
     </div>
   );
 }
