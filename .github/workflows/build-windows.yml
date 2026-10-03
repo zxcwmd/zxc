@@ -12,7 +12,7 @@ on:
         description: Release tag to create when publishing
         type: string
         required: true
-        default: v0.5.8-preview.1
+        default: v0.5.9-preview.1
   push:
     branches:
       - arena/01a0f20e-zxc
@@ -60,14 +60,14 @@ jobs:
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
-          RELEASE_TAG: ${{ inputs.release_tag || 'v0.5.8-preview.1' }}
+          RELEASE_TAG: ${{ inputs.release_tag || 'v0.5.9-preview.1' }}
         run: |
           if ($env:RELEASE_TAG -notmatch '^v[0-9A-Za-z][0-9A-Za-z.-]*$') {
             throw 'Release tag must start with v and contain only letters, numbers, dots, and hyphens.'
           }
           $installer = Get-ChildItem -Path release -Filter '*.exe' | Select-Object -First 1
           if (-not $installer) { throw 'Windows installer was not produced.' }
-          gh release create $env:RELEASE_TAG $installer.FullName --target $env:GITHUB_SHA --title "Bloom Client 0.5.8 Preview 1" --notes "Adds a second Studio main-menu scene with a clean white background fading into a charcoal horizon, a standing Minecraft player in an over-the-shoulder pose, and a custom enchanted netherite sword. Cherry Grove remains the default scene. Both scenes keep drag rotation without zoom, a smooth 3-second return, breathing, and occasional head turns. Windows x64 installer built from commit $env:GITHUB_SHA." --prerelease
+          gh release create $env:RELEASE_TAG $installer.FullName --target $env:GITHUB_SHA --title "Bloom Client 0.5.9 Preview 1" --notes "Reimagines the Studio menu as an epic white checkerboard stage with an enlarged Minecraft avatar on the left, the existing hero pose preserved, and a vertical navigation stack on the right. Spherical security drones hover around the player with pulsing red optics, fine targeting beams and reticles. Cherry Grove remains the default. Studio keeps drag rotation without zoom, a smooth 3-second return, breathing and occasional head turns. Windows x64 installer built from commit $env:GITHUB_SHA." --prerelease
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Upload build log on failure
