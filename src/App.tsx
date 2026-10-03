@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ChangeEvent, FormEvent, ReactNode } from 'react';
+import type { SkinViewer } from 'skinview3d';
 import {
   Activity,
   ArrowLeft,
@@ -185,9 +186,8 @@ function makeDemoSkin(): HTMLCanvasElement {
   return canvas;
 }
 
-function SkinPreview({ skin, cape, name, className = '' }: { skin: string | null; cape?: string | null; name?: string; className?: string }) {
+function SkinPreview({ skin, cape, name, className = '', pose = 'standing' }: { skin: string | null; cape?: string | null; name?: string; className?: string; pose?: 'standing' | 'seated' }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const viewerRef = useRef<{ setSize: (width: number, height: number) => void; dispose: () => void; autoRotate: boolean; autoRotateSpeed: number } | null>(null);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -195,27 +195,47 @@ function SkinPreview({ skin, cape, name, className = '' }: { skin: string | null
     if (!canvas || !frame) return;
     let cancelled = false;
     let observer: ResizeObserver | null = null;
-    let viewer: { setSize: (width: number, height: number) => void; dispose: () => void; autoRotate: boolean; autoRotateSpeed: number } | null = null;
-    void import('skinview3d').then(({ SkinViewer }) => {
+    let viewer: SkinViewer | null = null;
+    const seated = pose === 'seated';
+
+    void import('skinview3d').then(({ SkinViewer, FunctionAnimation }) => {
       if (cancelled) return;
+      const contextAttributes: WebGLContextAttributes = { alpha: true, premultipliedAlpha: true, antialias: true };
+      const context = canvas.getContext('webgl2', contextAttributes) ?? canvas.getContext('webgl', contextAttributes);
+      if (!context) return;
+
       const demo = skin ? null : makeDemoSkin();
       const bounds = frame.getBoundingClientRect();
+      const seatedAnimation = seated
+        ? new FunctionAnimation((player, progress) => {
+            const breath = Math.sin(progress * Math.PI * 0.8) * 0.018;
+            const joints = player.skin;
+            joints.body.rotation.set(-0.035 + breath, 0, 0);
+            joints.head.rotation.set(breath * 0.5, -0.1, 0);
+            joints.leftLeg.rotation.set(-Math.PI / 2 + breath * 0.12, 0, -0.035);
+            joints.rightLeg.rotation.set(-Math.PI / 2 - breath * 0.12, 0, 0.035);
+            joints.leftArm.rotation.set(-0.94 + breath, 0, 0.15);
+            joints.rightArm.rotation.set(-0.94 + breath, 0, -0.15);
+            player.rotation.y = -0.24;
+          })
+        : undefined;
+
       viewer = new SkinViewer({
         canvas,
         width: Math.max(160, Math.floor(bounds.width)),
         height: Math.max(200, Math.floor(bounds.height)),
         skin: skin ?? demo ?? undefined,
         cape: cape ?? undefined,
-        background: 0x101815,
         enableControls: true,
-        fov: 36,
-        zoom: 0.76,
+        fov: seated ? 34 : 36,
+        zoom: seated ? 1.02 : 0.76,
         pixelRatio: 1,
-        nameTag: name ?? undefined,
+        nameTag: seated ? undefined : name ?? undefined,
+        animation: seatedAnimation,
       });
-      viewer.autoRotate = true;
+      viewer.autoRotate = !seated;
       viewer.autoRotateSpeed = 0.62;
-      viewerRef.current = viewer;
+      if (seated) viewer.playerWrapper.position.y = -5;
       observer = new ResizeObserver(() => {
         const next = frame.getBoundingClientRect();
         viewer?.setSize(Math.max(160, Math.floor(next.width)), Math.max(200, Math.floor(next.height)));
@@ -226,9 +246,8 @@ function SkinPreview({ skin, cape, name, className = '' }: { skin: string | null
       cancelled = true;
       observer?.disconnect();
       viewer?.dispose();
-      viewerRef.current = null;
     };
-  }, [skin, cape, name]);
+  }, [skin, cape, name, pose]);
 
   return <div className={`skin-preview ${className}`}><canvas ref={canvasRef} aria-label={name ? `3D модель игрока ${name}` : '3D модель скина Minecraft'} /></div>;
 }
@@ -639,7 +658,7 @@ function App() {
           </div>
         </header>
 
-        {!desktop && <div className="preview-banner"><MonitorPlay size={15} /><span>Это интерактивный preview. Авторизация, запись файлов и запуск доступны в установленном приложении.</span><button type="button" onClick={() => void openExternal('https://github.com/zxcwmd/zxc/releases/tag/v0.5.1-preview.1')}>Скачать приложение</button></div>}
+        {!desktop && <div className="preview-banner"><MonitorPlay size={15} /><span>Это интерактивный preview. Авторизация, запись файлов и запуск доступны в установленном приложении.</span><button type="button" onClick={() => void openExternal('https://github.com/zxcwmd/zxc/releases/tag/v0.5.2-preview.1')}>Скачать приложение</button></div>}
         <div className="content-scroll">
           {loadingApp && <div className="loading-line"><span />Подготавливаем библиотеку Bloom…</div>}
           {versionsError && <div className="inline-warning"><CircleHelp size={16} /><span>Список версий Minecraft временно недоступен. Проверьте подключение к интернету и повторите попытку.</span><button type="button" onClick={() => void loadVersions()}>Повторить</button></div>}
@@ -711,27 +730,26 @@ function HomePage({
   return (
     <div className="page page-home">
       <section className="hero-card">
-        <div className="hero-grain" />
-        <div className="hero-orbit orbit-one" /><div className="hero-orbit orbit-two" />
+        <div className="hero-atmosphere" aria-hidden="true" />
         <div className="hero-copy">
-          <div className="hero-overline"><span className="hero-live" /> YOUR NEXT WORLD STARTS HERE</div>
+          <div className="hero-overline"><span className="hero-live" /> ВИШНЁВАЯ РОЩА · ТВОЙ СЛЕДУЮЩИЙ МИР</div>
           <h1>Играй.<br /><em>По-своему.</em></h1>
           <p>Твои версии, моды и настройки — в одном красивом месте. Без лишних экранов и сложных сборок.</p>
           <div className="hero-actions">
             <button className="button button-primary play-button" type="button" onClick={onPlay} disabled={!instance && !desktop}>
-              <Play size={17} fill="currentColor" />{instance ? 'Запустить Minecraft' : 'Создать игровой профиль'}<ArrowRight size={16} />
+              <Play size={17} fill="currentColor" />{instance ? 'Запустить Minecraft' : 'Создать профиль'}<ArrowRight size={16} />
             </button>
             {!account && <button className="button button-subtle" type="button" onClick={onOpenAuth}><UserRound size={16} /> Подключить аккаунт</button>}
           </div>
           <div className="hero-trust"><ShieldCheck size={15} /><span>Официальные файлы игры</span><span className="hero-separator">·</span><span>Без offline-режима</span></div>
         </div>
         <div className="hero-avatar-area">
-          <div className="hero-world-chip"><span className="pulse-point" />{instance ? 'ПРОФИЛЬ ВЫБРАН' : 'ГОТОВ К НАСТРОЙКЕ'}</div>
-          <div className="hero-character-frame"><div className="hero-glow" /><SkinPreview skin={skin} cape={cape} name={account?.name ?? 'Bloom'} className="hero-skin" /></div>
-          <div className="hero-avatar-caption"><span className="caption-label">{account ? 'СЕЙЧАС В ИГРЕ' : '3D SKIN PREVIEW'}</span><strong>{account?.name ?? 'Bloom Explorer'}</strong><span className="avatar-caption-dot"><i />{account ? providerLabel(account.provider) : 'Пример модели'}</span></div>
-          <div className="floating-chip chip-spark"><Sparkles size={14} />Bloom ready</div>
+          <div className="hero-world-chip"><span className="pulse-point" />ВИШНЁВАЯ ОПУШКА</div>
+          <div className="hero-character-frame"><div className="hero-glow" /><SkinPreview skin={skin} cape={cape} name={account?.name ?? 'Bloom'} className="hero-skin" pose="seated" /></div>
+          <div className="hero-avatar-caption"><span className="caption-label">{account ? 'У КОСТРА' : 'ПРИМЕР СКИНА'}</span><strong>{account?.name ?? 'Bloom Explorer'}</strong><span className="avatar-caption-dot"><i />{account ? providerLabel(account.provider) : 'Подключи аккаунт'}</span></div>
+          <div className="floating-chip chip-spark"><Sparkles size={14} />Вечер у костра</div>
         </div>
-        <div className="hero-bottom-line"><span>v0.5.1</span><span>WINDOWS · JAVA EDITION</span><span>CRAFTED FOR YOUR NEXT WORLD <span className="hero-line-dot">✳</span></span></div>
+        <div className="hero-bottom-line"><span>v0.5.2</span><span>WINDOWS · JAVA EDITION</span><span>СОБЕРИ СВОЙ СЛЕДУЮЩИЙ МИР <span className="hero-line-dot">✳</span></span></div>
       </section>
 
       <div className="home-section-heading">
@@ -1210,7 +1228,7 @@ function SettingsPage({
         <section className="settings-card settings-data-card"><div className="settings-card-heading"><div><span className="section-label">LOCAL STORAGE</span><h2>Данные и файлы</h2><p>Игровые каталоги хранятся раздельно от токенов входа.</p></div><span className="settings-heading-icon data-icon"><HardDriveDownload size={18} /></span></div><div className="path-row"><span className="path-type">APP DATA</span><code>{bootstrap?.dataDirectory ?? 'Работает только в установленном приложении'}</code><button className="copy-path" type="button" onClick={() => { if (bootstrap?.dataDirectory) void navigator.clipboard?.writeText(bootstrap.dataDirectory); onNotify('Путь скопирован.'); }} disabled={!desktop}>Копировать</button></div><div className="settings-bullet"><ShieldCheck size={15} /><span>Пароль Ely.by не записывается на диск. Сохраняется только сессионный токен, если ОС предоставляет безопасное хранилище.</span></div><div className="settings-bullet"><Box size={15} /><span>Удаление профиля в Bloom сохраняет игровые файлы и миры. Очистку можно сделать вручную.</span></div></section>
         <section className="settings-card settings-versions-card"><div className="settings-card-heading"><div><span className="section-label">SUPPORTED VERSIONS</span><h2>Полная история Minecraft</h2><p>Релизы, снапшоты, Beta и Alpha из официального version manifest.</p></div><span className="settings-heading-icon versions-icon"><Clock3 size={18} /></span></div><div className="version-count-line"><strong>{versions.length ? versions.length.toLocaleString('ru-RU') : '—'}</strong><span>официальных версий доступно</span></div><div className="version-channel-tags"><span>Release</span><span>Snapshot</span><span>Old Beta</span><span>Old Alpha</span></div><div className="catalog-mini-link"><span>Фильтры Modrinth используют версию профиля и загрузчик.</span><BadgeCheck size={15} /></div></section>
       </div>
-      <div className="settings-footer"><span>Bloom Client · desktop {bootstrap?.appVersion ?? '0.5.1'}</span><button type="button" onClick={() => openExternal('https://github.com/zxcwmd/zxc')}>О проекте <ArrowUpRight size={13} /></button></div>
+      <div className="settings-footer"><span>Bloom Client · desktop {bootstrap?.appVersion ?? '0.5.2'}</span><button type="button" onClick={() => openExternal('https://github.com/zxcwmd/zxc')}>О проекте <ArrowUpRight size={13} /></button></div>
     </div>
   );
 }
