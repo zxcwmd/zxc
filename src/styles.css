@@ -132,7 +132,7 @@ button:disabled { cursor: not-allowed !important; opacity: .52; }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; clip-path: inset(50%); border: 0; }
 
 /* Home */
-.hero-card { position: relative; display: grid; min-height: 430px; grid-template-columns: minmax(0, 1.05fr) minmax(310px, .95fr); overflow: hidden; isolation: isolate; background: linear-gradient(90deg, rgba(12, 7, 14, .94) 0%, rgba(15, 8, 15, .79) 31%, rgba(15, 8, 14, .42) 52%, rgba(10, 8, 13, .06) 100%), linear-gradient(0deg, rgba(10, 7, 13, .45), transparent 53%), url('./assets/cherry-clearing-sunset.png') center 53% / cover no-repeat; border: 1px solid rgba(255, 190, 220, .2); border-radius: 18px; box-shadow: 0 26px 72px rgba(10, 3, 10, .38), inset 0 1px rgba(255, 242, 255, .13); }
+.hero-card { position: relative; display: grid; min-height: 430px; grid-template-columns: minmax(0, 1.05fr) minmax(310px, .95fr); overflow: hidden; isolation: isolate; background: linear-gradient(90deg, rgba(12, 7, 14, .94) 0%, rgba(15, 8, 15, .79) 31%, rgba(15, 8, 14, .42) 52%, rgba(10, 8, 13, .06) 100%), linear-gradient(0deg, rgba(10, 7, 13, .45), transparent 53%), url('./assets/cherry-clearing-evening.png') center 53% / cover no-repeat; border: 1px solid rgba(255, 190, 220, .2); border-radius: 18px; box-shadow: 0 26px 72px rgba(10, 3, 10, .38), inset 0 1px rgba(255, 242, 255, .13); }
 .hero-atmosphere { position: absolute; z-index: 1; inset: 0; overflow: hidden; background: radial-gradient(ellipse at 77% 74%, rgba(255, 127, 79, .13), transparent 29%), linear-gradient(180deg, rgba(22, 8, 20, .02), rgba(11, 7, 13, .24)); pointer-events: none; }
 .hero-atmosphere::before, .hero-atmosphere::after { position: absolute; width: 6px; height: 9px; background: rgba(255, 193, 216, .68); border-radius: 75% 15% 75% 15%; box-shadow: 0 0 13px rgba(255, 175, 205, .3); content: ''; animation: petal-drift 7s ease-in-out infinite; }
 .hero-atmosphere::before { top: 25%; left: 57%; }
@@ -947,7 +947,7 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline-color:
 .connection-pill .online-dot { background: #ff9fc1; box-shadow: 0 0 8px rgba(255, 159, 193, .5); }
 .preview-banner { color: #dbc19d; background: rgba(171, 123, 66, .07); border-bottom-color: rgba(208, 163, 104, .11); }
 
-.hero-card { min-height: 430px; grid-template-columns: minmax(0, 1.05fr) minmax(310px, .95fr); background-image: linear-gradient(90deg, rgba(13, 7, 15, .92) 0%, rgba(17, 8, 16, .76) 31%, rgba(16, 8, 15, .38) 51%, rgba(11, 8, 13, .04) 100%), linear-gradient(0deg, rgba(10, 7, 12, .48), transparent 54%), url('./assets/cherry-clearing-sunset.png'); background-position: center, center, center 53%; border-color: rgba(255, 190, 220, .24); box-shadow: 0 26px 72px rgba(10, 3, 10, .4), inset 0 1px rgba(255, 242, 255, .15); }
+.hero-card { min-height: 430px; grid-template-columns: minmax(0, 1.05fr) minmax(310px, .95fr); background-image: linear-gradient(90deg, rgba(13, 7, 15, .92) 0%, rgba(17, 8, 16, .76) 31%, rgba(16, 8, 15, .38) 51%, rgba(11, 8, 13, .04) 100%), linear-gradient(0deg, rgba(10, 7, 12, .48), transparent 54%), url('./assets/cherry-clearing-evening.png'); background-position: center, center, center 53%; border-color: rgba(255, 190, 220, .24); box-shadow: 0 26px 72px rgba(10, 3, 10, .4), inset 0 1px rgba(255, 242, 255, .15); }
 .hero-atmosphere { background: radial-gradient(ellipse at 77% 74%, rgba(255, 131, 71, .19), transparent 28%), linear-gradient(180deg, rgba(27, 9, 24, .015), rgba(11, 7, 13, .18)); }
 .hero-copy { z-index: 3; padding: 42px 0 47px 42px; }
 .hero-overline { color: #f2b2ca; font-size: 9px; letter-spacing: .09em; text-shadow: 0 1px 9px rgba(15, 6, 13, .8); }
@@ -1064,7 +1064,7 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline-color:
 .home-shell .loading-line { position: absolute; z-index: 20; top: 12px; left: 16px; padding: 7px 10px; color: #f1dce7; background: rgba(26, 13, 23, .62); border: 1px solid rgba(255, 210, 230, .15); border-radius: 7px; backdrop-filter: blur(9px); }
 .home-shell .inline-warning { position: absolute; z-index: 30; top: 12px; left: 16px; max-width: min(620px, calc(100% - 32px)); background: rgba(38, 28, 21, .85); backdrop-filter: blur(10px); }
 .home-scene-page { width: 100%; height: 100%; min-height: 0; max-width: none; margin: 0; animation: none; }
-.home-scene-card { position: relative; isolation: isolate; width: 100%; height: 100%; min-height: 560px; overflow: hidden; background: #171020 url('./assets/cherry-clearing-sunset.png') center 53% / cover no-repeat; }
+.home-scene-card { position: relative; isolation: isolate; width: 100%; height: 100%; min-height: 560px; overflow: hidden; background: #171020 url('./assets/cherry-clearing-evening.png') center 53% / cover no-repeat; }
 .home-scene-card::before { position: absolute; z-index: 0; inset: 0; background: radial-gradient(ellipse at 50% 23%, rgba(24, 12, 26, .08), rgba(12, 8, 17, .13) 56%, rgba(9, 7, 12, .48) 100%); content: ''; pointer-events: none; }
 .home-scene-shade { position: absolute; z-index: 0; inset: 0; background: linear-gradient(180deg, rgba(12, 8, 18, .61) 0%, rgba(12, 8, 18, .12) 19%, rgba(12, 8, 15, .05) 53%, rgba(11, 8, 13, .7) 100%), linear-gradient(90deg, rgba(10, 7, 14, .35), transparent 35%, transparent 72%, rgba(10, 7, 14, .18)); pointer-events: none; }
 .home-scene-petals { position: absolute; z-index: 2; inset: 0; opacity: .56; pointer-events: none; background-image: radial-gradient(ellipse at center, rgba(255, 196, 219, .88) 0 1px, transparent 2px), radial-gradient(ellipse at center, rgba(255, 175, 208, .72) 0 2px, transparent 3px); background-size: 173px 211px, 257px 227px; background-position: 31px 43px, 107px 128px; animation: scene-petal-fall 18s linear infinite; mask-image: linear-gradient(180deg, #000 0%, transparent 70%); }
@@ -1341,11 +1341,11 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline-color:
 
 
 /* Sunset clearing layout: give the seated player room beside the fire. */
-.home-scene-card { background-image: url('./assets/cherry-clearing-sunset.png'); background-position: center 54%; }
-.home-scene-shade { background: linear-gradient(180deg, rgba(17, 8, 19, .52) 0%, rgba(17, 8, 19, .08) 23%, rgba(12, 8, 15, .02) 58%, rgba(10, 7, 12, .68) 100%), linear-gradient(90deg, rgba(10, 7, 14, .20), transparent 42%, rgba(10, 7, 14, .06)); }
+.home-scene-card { background-image: url('./assets/cherry-clearing-evening.png'); background-position: center 54%; }
+.home-scene-shade { background: linear-gradient(180deg, rgba(29, 11, 26, .46) 0%, rgba(29, 11, 26, .08) 24%, rgba(12, 8, 15, .01) 58%, rgba(22, 12, 15, .34) 100%), linear-gradient(90deg, rgba(10, 7, 14, .11), transparent 42%, rgba(10, 7, 14, .04)); }
 .home-scene-title { top: 11.5%; }
-.home-scene-player { right: clamp(18%, 33vw, 620px); bottom: 16%; width: clamp(300px, 29vw, 405px); height: clamp(290px, 42vh, 390px); }
-.home-scene-player::after { position: absolute; z-index: 1; right: 7%; bottom: 20px; left: 7%; height: 25px; content: ''; background: radial-gradient(ellipse, rgba(12, 8, 11, .68) 0%, rgba(12, 8, 11, .33) 46%, transparent 76%); filter: blur(4px); pointer-events: none; }
+.home-scene-player { left: clamp(36%, 42vw, 760px); right: auto; bottom: 11%; width: clamp(300px, 26vw, 375px); height: clamp(290px, 38vh, 360px); }
+.home-scene-player::after { position: absolute; z-index: 1; right: 8%; bottom: clamp(48px, 6.7vh, 68px); left: 8%; height: 24px; content: ''; background: radial-gradient(ellipse, rgba(12, 8, 11, .56) 0%, rgba(12, 8, 11, .24) 46%, transparent 76%); filter: blur(4px); pointer-events: none; }
 .home-scene-skin { position: relative; z-index: 2; width: 100%; height: 100%; filter: drop-shadow(0 10px 12px rgba(8, 5, 8, .48)); }
 .scene-player-caption { top: 54%; right: -78px; bottom: auto; pointer-events: none; }
 .home-scene-caption { display: none; }
@@ -1357,14 +1357,16 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline-color:
 .skin-interactive canvas { cursor: grab; touch-action: none; }
 .skin-interactive canvas.skin-dragging { cursor: grabbing; }
 @media (max-width: 1050px) {
-  .home-scene-player { right: clamp(18%, 24vw, 285px); width: clamp(270px, 34vw, 350px); }
+  .home-scene-player { left: clamp(290px, 36vw, 390px); right: auto; bottom: 12%; width: clamp(270px, 33vw, 350px); height: clamp(270px, 38vh, 330px); }
+  .home-scene-player::after { bottom: clamp(42px, 7vh, 62px); }
   .home-round-nav { left: 22px; width: 200px; }
 }
 @media (max-width: 760px) {
   .home-scene-card { background-position: 52% center; }
   .home-scene-title { top: 12%; }
   .home-scene-world-chip { display: none; }
-  .home-scene-player { right: 1%; bottom: 16%; width: 42%; height: clamp(180px, 28vh, 225px); }
+  .home-scene-player { left: auto; right: 1%; bottom: 16%; width: 42%; height: clamp(180px, 28vh, 225px); }
+  .home-scene-player::after { bottom: clamp(10px, 4vh, 24px); height: 18px; }
   .scene-player-caption { top: 48%; right: 0; bottom: auto; min-width: 86px; }
   .home-round-nav { top: 36%; right: 0; bottom: auto; left: 0; display: flex; width: 100%; justify-content: space-evenly; gap: 0; transform: none; }
   .home-round-nav button { width: 76px; }
