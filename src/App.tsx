@@ -355,7 +355,7 @@ function SkinPreview({ skin, cape, name, className = '', pose = 'standing' }: { 
         skin: skin ?? demo ?? undefined,
         cape: cape ?? undefined,
         enableControls: !interactive,
-        fov: hero ? 44 : seated ? 38 : 36,
+        fov: hero ? 45 : seated ? 38 : 36,
         zoom: hero ? 0.9 : seated ? 0.62 : 0.76,
         pixelRatio: 1,
         nameTag: interactive ? undefined : name ?? undefined,
@@ -369,7 +369,7 @@ function SkinPreview({ skin, cape, name, className = '', pose = 'standing' }: { 
         viewer.playerWrapper.rotation.y = baseYaw;
         if (hero) {
           viewer.controls.target.set(0, -10, 0);
-          viewer.camera.position.set(6, -16, 66);
+          viewer.camera.position.set(4, -14, 44);
         } else {
           viewer.controls.target.set(0, 1.5, 0);
           viewer.camera.position.set(8, 14, 80);
@@ -927,7 +927,7 @@ function App() {
           </div>
         </header>
 
-        {!desktop && <div className="preview-banner"><MonitorPlay size={15} /><span>Это интерактивный preview. Авторизация, запись файлов и запуск доступны в установленном приложении.</span><button type="button" onClick={() => void openExternal('https://github.com/zxcwmd/zxc/releases/tag/v0.5.9-preview.1')}>Скачать приложение</button></div>}
+        {!desktop && <div className="preview-banner"><MonitorPlay size={15} /><span>Это интерактивный preview. Авторизация, запись файлов и запуск доступны в установленном приложении.</span><button type="button" onClick={() => void openExternal('https://github.com/zxcwmd/zxc/releases/tag/v0.5.10-preview.1')}>Скачать приложение</button></div>}
         <div className="content-scroll">
           {loadingApp && <div className="loading-line"><span />Подготавливаем библиотеку Bloom…</div>}
           {versionsError && <div className="inline-warning"><CircleHelp size={16} /><span>Список версий Minecraft временно недоступен. Проверьте подключение к интернету и повторите попытку.</span><button type="button" onClick={() => void loadVersions()}>Повторить</button></div>}
@@ -1007,7 +1007,6 @@ function HomePage({
           <div className="studio-drone-field" aria-hidden="true">
             <div className="studio-drone studio-drone-alpha"><span className="studio-drone-beam" /><span className="studio-drone-orb"><i className="studio-drone-ring" /><i className="studio-drone-lens" /><i className="studio-drone-light" /></span></div>
             <div className="studio-drone studio-drone-beta"><span className="studio-drone-beam" /><span className="studio-drone-orb"><i className="studio-drone-ring" /><i className="studio-drone-lens" /><i className="studio-drone-light" /></span></div>
-            <div className="studio-drone studio-drone-gamma"><span className="studio-drone-beam" /><span className="studio-drone-orb"><i className="studio-drone-ring" /><i className="studio-drone-lens" /><i className="studio-drone-light" /></span></div>
           </div>
         </>}
         <header className="home-scene-header">
@@ -1651,7 +1650,7 @@ function SettingsPage({
         <section className="settings-card settings-data-card"><div className="settings-card-heading"><div><span className="section-label">LOCAL STORAGE</span><h2>Данные и файлы</h2><p>Игровые каталоги хранятся раздельно от токенов входа.</p></div><span className="settings-heading-icon data-icon"><HardDriveDownload size={18} /></span></div><div className="path-row"><span className="path-type">APP DATA</span><code>{bootstrap?.dataDirectory ?? 'Работает только в установленном приложении'}</code><button className="copy-path" type="button" onClick={() => { if (bootstrap?.dataDirectory) void navigator.clipboard?.writeText(bootstrap.dataDirectory); onNotify('Путь скопирован.'); }} disabled={!desktop}>Копировать</button></div><div className="settings-bullet"><ShieldCheck size={15} /><span>Пароль Ely.by не записывается на диск. Сохраняется только сессионный токен, если ОС предоставляет безопасное хранилище.</span></div><div className="settings-bullet"><Box size={15} /><span>Удаление профиля в Bloom сохраняет игровые файлы и миры. Очистку можно сделать вручную.</span></div></section>
         <section className="settings-card settings-versions-card"><div className="settings-card-heading"><div><span className="section-label">SUPPORTED VERSIONS</span><h2>Полная история Minecraft</h2><p>Релизы, снапшоты, Beta и Alpha из официального version manifest.</p></div><span className="settings-heading-icon versions-icon"><Clock3 size={18} /></span></div><div className="version-count-line"><strong>{versions.length ? versions.length.toLocaleString('ru-RU') : '—'}</strong><span>официальных версий доступно</span></div><div className="version-channel-tags"><span>Release</span><span>Snapshot</span><span>Old Beta</span><span>Old Alpha</span></div><div className="catalog-mini-link"><span>Фильтры Modrinth используют версию профиля и загрузчик.</span><BadgeCheck size={15} /></div></section>
       </div>
-      <div className="settings-footer"><span>Bloom Client · desktop {bootstrap?.appVersion ?? '0.5.9'}</span><button type="button" onClick={() => openExternal('https://github.com/zxcwmd/zxc')}>О проекте <ArrowUpRight size={13} /></button></div>
+      <div className="settings-footer"><span>Bloom Client · desktop {bootstrap?.appVersion ?? '0.5.10'}</span><button type="button" onClick={() => openExternal('https://github.com/zxcwmd/zxc')}>О проекте <ArrowUpRight size={13} /></button></div>
     </div>
   );
 }
