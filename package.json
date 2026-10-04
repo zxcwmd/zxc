@@ -1,0 +1,70 @@
+{
+  "name": "bloom-client",
+  "version": "0.5.12",
+  "description": "Bloom Client — Minecraft launcher",
+  "author": "Bloom Client",
+  "private": true,
+  "type": "module",
+  "main": "electron/main.cjs",
+  "scripts": {
+    "dev": "vite --host 0.0.0.0",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview --host 0.0.0.0",
+    "desktop:dev": "concurrently -k -n WEB,DESKTOP \"npm:dev\" \"wait-on http://localhost:5173 && electron .\"",
+    "dist:win": "npm run build && electron-builder --win nsis --x64 --publish never"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@vitejs/plugin-react": "^4.3.4",
+    "concurrently": "^10.0.5",
+    "electron": "^44.5.1",
+    "electron-builder": "^26.15.3",
+    "lucide-react": "^0.468.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "typescript": "~5.6.3",
+    "vite": "^6.0.1",
+    "wait-on": "^9.5.1"
+  },
+  "build": {
+    "appId": "com.bloomclient.desktop",
+    "productName": "Bloom Client",
+    "asar": true,
+    "directories": {
+      "output": "release",
+      "buildResources": "build"
+    },
+    "files": [
+      "dist/**/*",
+      "electron/**/*",
+      "package.json"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "build/icon.ico",
+      "artifactName": "Bloom-Client-Setup-${version}-${arch}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "deleteAppDataOnUninstall": false
+    }
+  },
+  "dependencies": {
+    "eml-lib": "^2.7.3",
+    "skinview3d": "^3.4.2",
+    "three": "^0.156.1",
+    "unzipper": "^0.12.5"
+  }
+}
