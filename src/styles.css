@@ -1755,16 +1755,17 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline-color:
 .scene-studio .home-scene-player {
   left: clamp(-28px, -2vw, 0px);
   right: auto;
-  bottom: -3%;
-  width: clamp(520px, 55vw, 980px);
-  height: clamp(520px, 100vh, 980px);
+  top: 0;
+  bottom: 0;
+  width: clamp(500px, 55vw, 820px);
+  height: auto;
   transform: none;
 }
 .scene-studio .scene-player-caption { display: none; }
 .scene-studio .home-scene-player::after { right: 1%; bottom: 1%; left: 2%; height: 34px; filter: blur(12px); }
 .scene-studio .home-scene-skin { filter: drop-shadow(0 16px 25px rgba(28, 35, 43, .24)); }
 .scene-studio .studio-drone { --drone-size: clamp(112px, 11vw, 166px); }
-.scene-studio .studio-drone-alpha { left: 49%; top: 4%; --drone-size: clamp(138px, 13.5vw, 184px); --beam-angle: 135deg; --beam-length: clamp(240px, 31vw, 460px); }
+.scene-studio .studio-drone-alpha { left: 49%; top: 13.5%; --drone-size: clamp(138px, 13.5vw, 184px); --beam-angle: 135deg; --beam-length: clamp(240px, 31vw, 460px); }
 .scene-studio .studio-drone-beta { left: 64%; top: 35%; --drone-size: clamp(105px, 10vw, 146px); --beam-angle: 180deg; --beam-length: clamp(290px, 40vw, 570px); }
 .scene-studio .studio-drone-gamma { display: none; }
 .scene-studio .studio-drone-beam {
@@ -1826,7 +1827,7 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline-color:
 .scene-studio .home-account-hint { right: clamp(14px, 2vw, 30px); bottom: 3px; left: auto; transform: none; }
 
 @media (max-width: 760px) {
-  .scene-studio .home-scene-player { left: -6%; bottom: 9%; width: 67%; height: clamp(340px, 78vh, 620px); }
+  .scene-studio .home-scene-player { top: auto; left: -6%; bottom: 9%; width: 67%; height: clamp(340px, 78vh, 620px); }
   .scene-studio .studio-drone { --drone-size: 72px; }
   .scene-studio .studio-drone-alpha { left: 42%; top: 16%; --drone-size: 92px; --beam-angle: 116deg; --beam-length: clamp(180px, 39vw, 310px); }
   .scene-studio .studio-drone-beta { left: 62%; top: 38%; --drone-size: 72px; --beam-angle: 166deg; --beam-length: clamp(150px, 42vw, 330px); }
@@ -1849,6 +1850,7 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline-color:
   .scene-studio .home-scene-footer { right: 6px; width: 39vw; }
 }
 @media (max-height: 720px) and (min-width: 761px) {
-  .scene-studio .home-scene-player { bottom: -2%; height: 98vh; }
+  .scene-studio .home-scene-player { top: 0; bottom: 0; height: auto; }
+  .scene-studio .studio-drone-alpha { top: 15%; }
   .scene-studio .home-round-nav { top: 47%; }
 }

@@ -12,7 +12,7 @@ on:
         description: Release tag to create when publishing
         type: string
         required: true
-        default: v0.5.10-preview.1
+        default: v0.5.11-preview.1
   push:
     branches:
       - arena/01a0f20e-zxc
@@ -60,14 +60,14 @@ jobs:
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
-          RELEASE_TAG: ${{ inputs.release_tag || 'v0.5.10-preview.1' }}
+          RELEASE_TAG: ${{ inputs.release_tag || 'v0.5.11-preview.1' }}
         run: |
           if ($env:RELEASE_TAG -notmatch '^v[0-9A-Za-z][0-9A-Za-z.-]*$') {
             throw 'Release tag must start with v and contain only letters, numbers, dots, and hyphens.'
           }
           $installer = Get-ChildItem -Path release -Filter '*.exe' | Select-Object -First 1
           if (-not $installer) { throw 'Windows installer was not produced.' }
-          gh release create $env:RELEASE_TAG $installer.FullName --target $env:GITHUB_SHA --title "Bloom Client 0.5.10 Preview 1" --notes "Refines the Studio scene to match the arena reference: the original hero pose is preserved while the player is framed much closer on the left; two large spherical sentry drones hover to the right with bright red optics and converging targeting beams. The high-contrast perspective checkerboard fills the floor, with the vertical navigation kept at the right edge. Cherry Grove remains the default, and drag rotation without zoom, smooth 3-second return, breathing and occasional head turns remain. Windows x64 installer built from commit $env:GITHUB_SHA." --prerelease
+          gh release create $env:RELEASE_TAG $installer.FullName --target $env:GITHUB_SHA --title "Bloom Client 0.5.11 Preview 1" --notes "Fixes the Studio framing: the hero canvas now stays inside the scene instead of being clipped by the launcher header, and the camera is pulled back and re-centered so the player and sword remain within the composition. The hero pose, animation and sword geometry are unchanged. The upper drone is fully clear of the toolbar; both red targeting beams, right-side vertical navigation and perspective checkerboard remain. Cherry Grove remains the default, and Studio keeps drag rotation without zoom, smooth 3-second return, breathing and occasional head turns. Windows x64 installer built from commit $env:GITHUB_SHA." --prerelease
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Upload build log on failure
